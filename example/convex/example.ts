@@ -117,22 +117,22 @@ export const inlineVanilla = internalMutation({
         period: SECOND,
       } as RateLimitConfig;
       const before = await ctx.runMutation(
-        components.rateLimiter.public.rateLimit,
+        components.rateLimiter.lib.rateLimit,
         { name: "simple " + kind, config }
       );
       assert(before.ok);
       assert(before.retryAfter === undefined);
       const after = await ctx.runQuery(
-        components.rateLimiter.public.checkRateLimit,
+        components.rateLimiter.lib.checkRateLimit,
         { name: "simple " + kind, config }
       );
       assert(!after.ok);
       assert(after.retryAfter! > 0);
-      await ctx.runMutation(components.rateLimiter.public.resetRateLimit, {
+      await ctx.runMutation(components.rateLimiter.lib.resetRateLimit, {
         name: "simple " + kind,
       });
       const after2 = await ctx.runQuery(
-        components.rateLimiter.public.checkRateLimit,
+        components.rateLimiter.lib.checkRateLimit,
         { name: "simple " + kind, config }
       );
       assert(after2.ok);

@@ -41,7 +41,7 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   rateLimiter: {
-    public: {
+    lib: {
       checkRateLimit: FunctionReference<
         "query",
         "internal",

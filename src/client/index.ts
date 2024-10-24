@@ -96,7 +96,7 @@ export class RateLimiter<
       ? [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>?]
       : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>]
   ): Promise<RateLimitReturns> {
-    return ctx.runQuery(this.component.public.checkRateLimit, {
+    return ctx.runQuery(this.component.lib.checkRateLimit, {
       ...options[0],
       name,
       config: this.getConfig(options[0], name),
@@ -131,7 +131,7 @@ export class RateLimiter<
       ? [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>?]
       : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>]
   ): Promise<RateLimitReturns> {
-    return ctx.runMutation(this.component.public.rateLimit, {
+    return ctx.runMutation(this.component.lib.rateLimit, {
       ...options[0],
       name,
       config: this.getConfig(options[0], name),
@@ -152,7 +152,7 @@ export class RateLimiter<
     name: Name,
     args?: { key?: string }
   ): Promise<void> {
-    await runMutation(this.component.public.resetRateLimit, {
+    await runMutation(this.component.lib.resetRateLimit, {
       ...(args ?? null),
       name,
     });
