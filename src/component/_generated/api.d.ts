@@ -62,6 +62,12 @@ export type Mounts = {
       },
       { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
     >;
+    clearAll: FunctionReference<
+      "mutation",
+      "public",
+      { before?: number },
+      null
+    >;
     rateLimit: FunctionReference<
       "mutation",
       "public",

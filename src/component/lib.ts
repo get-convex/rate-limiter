@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import { rateLimitArgs, rateLimitReturns } from "../shared.js";
 import { checkRateLimitOrThrow } from "./internal.js";
+import { api } from "./_generated/api.js";
 
 export const rateLimit = mutation({
   args: rateLimitArgs,
@@ -43,6 +44,28 @@ export const resetRateLimit = mutation({
       .collect();
     for (const shard of allShards) {
       await ctx.db.delete(shard._id);
+    }
+  },
+});
+
+export const clearAll = mutation({
+  args: { before: v.optional(v.number()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const results = await ctx.db
+      .query("rateLimits")
+      .withIndex("by_creation_time", (q) =>
+        q.lte("_creationTime", args.before ?? Date.now())
+      )
+      .order("desc")
+      .take(100);
+    for (const m of results) {
+      await ctx.db.delete(m._id);
+    }
+    if (results.length === 100) {
+      await ctx.scheduler.runAfter(0, api.lib.clearAll, {
+        before: results[99]._creationTime,
+      });
     }
   },
 });
