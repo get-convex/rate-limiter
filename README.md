@@ -2,8 +2,6 @@
 
 [![npm version](https://badge.fury.io/js/@convex-dev%2Frate-limiter.svg)](https://badge.fury.io/js/@convex-dev%2Frate-limiter)
 
-**Note: Convex Components are currently in beta**
-
 <!-- START: Include on https://convex.dev/components -->
 
 This component provides application-level rate limiting.
