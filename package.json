@@ -55,7 +55,7 @@
     }
   },
   "peerDependencies": {
-    "convex": "~1.16.5 || ~1.17.0"
+    "convex": "~1.16.5 || ~1.17.0 || ~1.18.0"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^4.0.3",
