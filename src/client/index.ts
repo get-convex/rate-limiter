@@ -200,12 +200,18 @@ export class RateLimiter<
   ) {
     const rateLimiter = this;
     return {
-      getRateLimit: async function(
-        ctx: RunQueryCtx,
-        options?: RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }
-      ) {
-        return rateLimiter.getValue(ctx, name, options ? [options] : [undefined]);
-      }
+      getRateLimit: queryGeneric({
+        args: {
+          sampleShards: v.optional(v.number()),
+        },
+        handler: async (
+          ctx,
+          args: { sampleShards?: number }
+        ) => {
+          const options = args.sampleShards ? { sampleShards: args.sampleShards } : undefined;
+          return rateLimiter.getValue(ctx, name, options as any);
+        }
+      })
     };
   }
 
