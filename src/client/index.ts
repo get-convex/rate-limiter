@@ -153,6 +153,61 @@ export class RateLimiter<
       name,
     });
   }
+  
+  /**
+   * Get the current value and metadata of a rate limit.
+   * This function returns the current token utilization data without consuming any tokens.
+   * 
+   * @param ctx The ctx object from a query, including runQuery.
+   * @param name The name of the rate limit.
+   * @param options The rate limit arguments. `config` is required if the rate
+   * limit was not defined in {@link RateLimiter}. See {@link RateLimitArgs}.
+   * @returns An object containing the current value, timestamp, window start time (for fixed window),
+   * and the rate limit configuration.
+   */
+  async getValue<Name extends string = keyof Limits & string>(
+    ctx: RunQueryCtx,
+    name: Name,
+    ...options: Name extends keyof Limits & string
+      ? [(RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }) | undefined]
+      : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }]
+  ) {
+    return ctx.runQuery(this.component.lib.getValue, {
+      ...options[0],
+      name,
+      config: this.getConfig(options[0], name),
+    });
+  }
+  
+  /**
+   * Creates a getter function that can be exported from your API.
+   * This is a convenience function to re-export the query for client use.
+   * 
+   * @param name The name of the rate limit.
+   * @returns An object containing a getRateLimit function that can be exported.
+   * 
+   * Example:
+   * ```ts
+   * // In your API file:
+   * export const { getRateLimit } = rateLimiter.getter("myLimit");
+   * 
+   * // In your client:
+   * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
+   * ```
+   */
+  getter<Name extends string = keyof Limits & string>(
+    name: Name
+  ) {
+    const rateLimiter = this;
+    return {
+      getRateLimit: async function(
+        ctx: RunQueryCtx,
+        options?: RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }
+      ) {
+        return rateLimiter.getValue(ctx, name, options ? [options] : [undefined]);
+      }
+    };
+  }
 
   private getConfig<Name extends string>(
     args: RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> | undefined,
