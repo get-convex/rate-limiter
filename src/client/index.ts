@@ -4,8 +4,9 @@ import {
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
+  queryGeneric,
 } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { api } from "../component/_generated/api.js"; // the component's public api
 import {
   RateLimitArgs,
@@ -27,7 +28,7 @@ export const HOUR = 60 * MINUTE;
 export function isRateLimitError(
   error: unknown
 ): error is { data: RateLimitError } {
-  return error instanceof ConvexError && error.data["kind"] === "RateLimited";
+  return error instanceof ConvexError && (error as any).data["kind"] === "RateLimited";
 }
 
 /**
@@ -205,11 +206,11 @@ export class RateLimiter<
           sampleShards: v.optional(v.number()),
         },
         handler: async (
-          ctx,
+          ctx: GenericQueryCtx<GenericDataModel>,
           args: { sampleShards?: number }
         ) => {
           const options = args.sampleShards ? { sampleShards: args.sampleShards } : undefined;
-          return rateLimiter.getValue(ctx, name, options as any);
+          return rateLimiter.getValue(ctx, name, [options] as any);
         }
       })
     };
