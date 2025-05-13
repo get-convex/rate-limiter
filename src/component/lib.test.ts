@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import schema from "./schema.js";
 import { modules } from "./setup.test.js";
 import { checkRateLimit, rateLimit, resetRateLimit } from "./lib.js";
+import { api } from "./_generated/api.js";
 
 const Second = 1_000;
 const Minute = 60 * Second;
@@ -23,19 +24,19 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "simple";
       const config = { kind, rate: 1, period: Second };
       await t.run(async (ctx) => {
-        const before = await checkRateLimit(ctx, {
+        const before = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
         expect(before.ok).toBe(true);
         expect(before.retryAfter).toBe(undefined);
-        const actual = await rateLimit(ctx, {
+        const actual = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
         });
         expect(actual.ok).toBe(true);
         expect(actual.retryAfter).toBe(undefined);
-        const after = await checkRateLimit(ctx, {
+        const after = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
@@ -50,7 +51,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const config = { kind, rate: 1, period: Second };
       const global = await t.run(
         async (ctx) =>
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
           })
@@ -59,7 +60,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       expect(global.retryAfter).toBe(undefined);
       const after = await t.run(
         async (ctx) =>
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
           })
@@ -72,7 +73,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const t = convexTest(schema, modules);
       await expect(() =>
         t.run(async (ctx) => {
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name: "simple",
             count: 2,
             config: {
@@ -91,7 +92,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const config = { kind, rate: 1, period: Second };
       const keyed = await t.run(
         async (ctx) =>
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
             key: "key",
@@ -101,7 +102,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       expect(keyed.retryAfter).toBe(undefined);
       const keyed2 = await t.run(
         async (ctx) =>
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
             key: "key2",
@@ -116,14 +117,14 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "burst";
       const config = { kind, rate: 1, period: Second, capacity: 3 };
       await t.run(async (ctx) => {
-        const before = await rateLimit(ctx, {
+        const before = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
           count: 3,
         });
         expect(before.ok).toBe(true);
         expect(before.retryAfter).toBe(undefined);
-        const keyed = await rateLimit(ctx, {
+        const keyed = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           key: "foo",
@@ -131,7 +132,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         });
         expect(keyed.ok).toBe(true);
         expect(keyed.retryAfter).toBe(undefined);
-        const no = await rateLimit(ctx, {
+        const no = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           key: "foo",
@@ -145,7 +146,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "simple";
       const config = { kind, rate: 10, period: Minute };
       const one = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           count: 5,
           config,
@@ -164,7 +165,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         vi.setSystemTime(one!.ts + 1 * Minute);
       }
       const two = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           count: 6,
           config,
@@ -183,7 +184,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         expect(two!.value).toBe(4);
       }
       const three = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           count: 10,
           config,
@@ -208,7 +209,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "simple";
       const config = { kind, rate: 10, period: Minute };
       const one = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           count: 5,
           config,
@@ -228,7 +229,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         vi.setSystemTime(one!.ts + 1 * Minute);
       }
       const two = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           count: 16,
@@ -249,7 +250,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       }
       vi.setSystemTime(two!.ts + 30 * Second);
       const three = await t.run(async (ctx) => {
-        const result = await rateLimit(ctx, {
+        const result = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           count: 5,
@@ -279,14 +280,14 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "simple";
       const config = { kind, rate: 1, period: Second };
       await t.run(async (ctx) => {
-        const before = await rateLimit(ctx, {
+        const before = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
         expect(before.ok).toBe(true);
         expect(before.retryAfter).toBe(undefined);
-        await resetRateLimit(ctx, { name });
-        const after = await rateLimit(ctx, {
+        await ctx.runMutation(api.lib.resetRateLimit, { name });
+        const after = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
@@ -301,15 +302,15 @@ describe.each(["token bucket", "fixed window"] as const)(
       const key = "key";
       const config = { kind, rate: 1, period: Second };
       await t.run(async (ctx) => {
-        const before = await rateLimit(ctx, {
+        const before = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
           key,
         });
         expect(before.ok).toBe(true);
         expect(before.retryAfter).toBe(undefined);
-        await resetRateLimit(ctx, { name, key });
-        const after = await rateLimit(ctx, {
+        await ctx.runMutation(api.lib.resetRateLimit, { name, key });
+        const after = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
           key,
@@ -324,13 +325,13 @@ describe.each(["token bucket", "fixed window"] as const)(
       const name = "reserved";
       const config = { kind, rate: 1, period: Hour };
       await t.run(async (ctx) => {
-        const before = await rateLimit(ctx, {
+        const before = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
         expect(before.ok).toBe(true);
         expect(before.retryAfter).toBe(undefined);
-        const reserved = await rateLimit(ctx, {
+        const reserved = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           count: 100,
@@ -338,7 +339,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         });
         expect(reserved.ok).toBe(true);
         expect(reserved.retryAfter).toBeGreaterThan(0);
-        const noSimple = await checkRateLimit(ctx, {
+        const noSimple = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
@@ -357,14 +358,14 @@ describe.each(["token bucket", "fixed window"] as const)(
         maxReserved: 1,
       };
       await t.run(async (ctx) => {
-        const check = await checkRateLimit(ctx, {
+        const check = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
           count: 2,
           reserve: true,
         });
         expect(check.ok).toBe(true);
-        const reserved = await rateLimit(ctx, {
+        const reserved = await ctx.runMutation(api.lib.rateLimit, {
           name,
           config,
           count: 2,
@@ -372,7 +373,7 @@ describe.each(["token bucket", "fixed window"] as const)(
         });
         expect(reserved.ok).toBe(true);
         expect(reserved.retryAfter).toBeGreaterThan(0);
-        const noSimple = await checkRateLimit(ctx, {
+        const noSimple = await ctx.runQuery(api.lib.checkRateLimit, {
           name,
           config,
         });
@@ -384,7 +385,7 @@ describe.each(["token bucket", "fixed window"] as const)(
       const t = convexTest(schema, modules);
       await expect(() =>
         t.run(async (ctx) => {
-          await rateLimit(ctx, {
+          await ctx.runMutation(api.lib.rateLimit, {
             name: "simple",
             count: 4,
             reserve: true,
