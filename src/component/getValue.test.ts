@@ -1,0 +1,84 @@
+import { convexTest } from "convex-test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import schema from "./schema.js";
+import { modules } from "./setup.test.js";
+import { getValue } from "./lib.js";
+
+const Second = 1_000;
+const Minute = 60 * Second;
+
+describe.each(["token bucket", "fixed window"] as const)(
+  "getValue %s",
+  (kind) => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test("get value for unused rate limit", async () => {
+      const t = convexTest(schema, modules);
+      const name = "unused";
+      const config = { kind, rate: 10, period: Second };
+      
+      await t.run(async (ctx) => {
+        const result = await getValue(ctx, {
+          name,
+          config,
+        });
+        
+        expect(result.value).toBe(10);
+        expect(result.ts).toBeDefined();
+        expect(result.config).toEqual(config);
+        
+        if (kind === "fixed window") {
+          expect(result.windowStart).toBeDefined();
+        } else {
+          expect(result.windowStart).toBeUndefined();
+        }
+      });
+    });
+    
+    test("get value with sampleShards parameter", async () => {
+      const t = convexTest(schema, modules);
+      const name = "sharded";
+      const config = { kind, rate: 10, period: Second, shards: 5 };
+      
+      await t.run(async (ctx) => {
+        const result = await getValue(ctx, {
+          name,
+          config,
+          sampleShards: 3,
+        });
+        
+        expect(result.value).toBe(10);
+        expect(result.ts).toBeDefined();
+        expect(result.config).toEqual(config);
+      });
+    });
+    
+    test("get value after consumption", async () => {
+      const t = convexTest(schema, modules);
+      const name = "consumed";
+      const config = { kind, rate: 10, period: Second };
+      
+      await t.run(async (ctx) => {
+        await ctx.runMutation(modules.lib.rateLimit, {
+          name,
+          config,
+          count: 4,
+        });
+        
+        const result = await getValue(ctx, {
+          name,
+          config,
+        });
+        
+        expect(result.value).toBe(6);
+        expect(result.ts).toBeDefined();
+        expect(result.config).toEqual(config);
+      });
+    });
+  }
+);
