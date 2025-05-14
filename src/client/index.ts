@@ -209,18 +209,7 @@ export class RateLimiter<
    * ```
    */
   getter<Name extends string = keyof Limits & string>(
-    name: Name,
-    ...options: Name extends keyof Limits & string
-      ? [
-          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          })?,
-        ]
-      : [
-          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          },
-        ]
+    name: Name
   ) {
     return {
       getRateLimit: queryGeneric({
@@ -230,10 +219,9 @@ export class RateLimiter<
         },
         handler: async (ctx, args) => {
           return ctx.runQuery(this.component.lib.getValue, {
-            ...options[0],
             ...args,
             name,
-            config: this.getConfig(options[0], name),
+            config: this.getConfig(undefined, name),
           });
         },
       }),

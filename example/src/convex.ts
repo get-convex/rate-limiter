@@ -1,5 +1,4 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { api } from "../convex/_generated/api";
 import React from "react";
 
 const CONVEX_URL = process.env.VITE_CONVEX_URL || "https://example-dev.convex.cloud";
