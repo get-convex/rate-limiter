@@ -1,72 +1,24 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-
-const useRateLimitMock = (initialValue = 10, maxValue = 10, refillRate = 1) => {
-  const [value, setValue] = useState(initialValue);
-  const [, setLastUpdate] = useState(Date.now());
-  const [timeOffset, setTimeOffset] = useState(0);
-  const [clientStartTime] = useState(Date.now());
-  
-  useEffect(() => {
-    const clientTime = Date.now();
-    setTimeout(() => {
-      const simulatedServerTime = Date.now() + 50; // Add 50ms to simulate clock skew
-      setTimeOffset(simulatedServerTime - clientTime);
-      console.log(`Clock skew detected: ${simulatedServerTime - clientTime}ms`);
-    }, 200);
-  }, []);
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLastUpdate(Date.now());
-      setValue(prev => Math.min(maxValue, prev + refillRate / 10));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [maxValue, refillRate]);
-  
-  const getCurrentServerTime = useCallback(() => {
-    return Date.now() + timeOffset;
-  }, [timeOffset]);
-  
-  const getValue = useCallback(() => {
-    return value;
-  }, [value]);
-  
-  const retryAt = useCallback((count = 1) => {
-    if (value >= count) return null;
-    
-    const neededTokens = count - value;
-    const timeToRefill = (neededTokens / refillRate) * 1000;
-    
-    const serverRetryTime = getCurrentServerTime() + timeToRefill;
-    return serverRetryTime - timeOffset;
-  }, [value, refillRate, timeOffset, getCurrentServerTime]);
-  
-  const status = useMemo(() => {
-    const retryTime = retryAt(1);
-    return {
-      ok: retryTime === null,
-      retryAt: retryTime,
-    };
-  }, [retryAt]);
-  
-  return {
-    status,
-    getValue,
-    retryAt,
-  };
-};
+import { useState } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useRateLimit } from '../../../src/client/react';
 
 export const RateLimitExample = () => {
   const [count, setCount] = useState(1);
   const [consumedTokens, setConsumedTokens] = useState(0);
   
-  // const { status, getValue, retryAt } = useRateLimit(api.rateLimiter.getRateLimit);
-  
-  const { status, getValue, retryAt } = useRateLimitMock(8, 10, 1);
+  const consumeTokensMutation = useMutation(api.example.consumeTokens);
+  const { status, getValue, retryAt } = useRateLimit(api.example.getRateLimit, api.example.getServerTime);
   
   const handleConsume = () => {
     if (status.ok) {
-      setConsumedTokens(prev => prev + count);
+      consumeTokensMutation({ count })
+        .then(() => {
+          setConsumedTokens(prev => prev + count);
+        })
+        .catch(error => {
+          console.error("Failed to consume tokens:", error);
+        });
     }
   };
   

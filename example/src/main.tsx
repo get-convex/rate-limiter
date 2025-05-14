@@ -2,9 +2,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { ConvexProviderWithAuth } from './convex'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ConvexProviderWithAuth>
+      <App />
+    </ConvexProviderWithAuth>
   </StrictMode>,
 )

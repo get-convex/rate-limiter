@@ -12,6 +12,8 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  mutation,
+  query,
 } from "./_generated/server";
 
 const rateLimiter = new RateLimiter(components.rateLimiter, {
@@ -20,6 +22,34 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   sendMessage: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 3 },
   // One global / singleton rate limit
   freeTrialSignUp: { kind: "fixed window", rate: 100, period: HOUR },
+  demoLimit: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
+});
+
+export const getRateLimit = query({
+  args: {
+    sampleShards: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return rateLimiter.getValue(ctx, "demoLimit", args);
+  },
+});
+
+export const consumeTokens = mutation({
+  args: {
+    count: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return rateLimiter.limit(ctx, "demoLimit", {
+      count: args.count || 1,
+    });
+  },
+});
+
+export const getServerTime = mutation({
+  args: {},
+  handler: async () => {
+    return Date.now();
+  },
 });
 
 export const test = internalMutation({
