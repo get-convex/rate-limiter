@@ -16,7 +16,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node", "react"]
   },
   "include": ["./src/**/*"]
 }

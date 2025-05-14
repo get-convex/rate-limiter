@@ -1,4 +1,5 @@
 import { mutation } from "./_generated/server.js";
+import { v } from "convex/values";
 
 /**
  * A simple mutation that returns the current server time.
@@ -8,7 +9,8 @@ import { mutation } from "./_generated/server.js";
  */
 export const getServerTime = mutation({
   args: {},
-  handler: async (): Promise<number> => {
+  returns: v.number(),
+  handler: async () => {
     return Date.now();
   },
 });

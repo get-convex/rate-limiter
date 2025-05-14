@@ -197,7 +197,6 @@ export class RateLimiter<
   getter<Name extends string = keyof Limits & string>(
     name: Name
   ) {
-    const rateLimiter = this;
     return {
       getRateLimit: queryGeneric({
         args: {
@@ -207,9 +206,10 @@ export class RateLimiter<
           ctx: GenericQueryCtx<GenericDataModel>,
           args: { sampleShards?: number }
         ) => {
+          const options = args.sampleShards !== undefined ? { sampleShards: args.sampleShards } : undefined;
           return ctx.runQuery(this.component.lib.getValue, {
             name,
-            sampleShards: args.sampleShards,
+            ...(options || {}),
             config: this.getConfig(undefined, name),
           });
         }
