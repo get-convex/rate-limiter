@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { FunctionReference } from "convex/server";
+import { useQuery, useMutation } from "convex/react";
+import { FunctionReference, MutationReference } from "convex/server";
 
 /**
  * A hook for using rate limits in React components.
@@ -8,6 +8,7 @@ import { FunctionReference } from "convex/server";
  * including the ability to check if an action is allowed and when it can be retried.
  * 
  * @param getRateLimitQuery The query function returned by rateLimiter.getter().getRateLimit
+ * @param getServerTimeMutation A mutation that returns the current server time (Date.now())
  * @param sampleShards Optional number of shards to sample (default: 1)
  * @returns An object containing:
  *   - status: The current status of the rate limit (ok, retryAt)
@@ -29,46 +30,83 @@ export function useRateLimit(
       start?: number;
     };
   }>,
+  getServerTimeMutation: MutationReference<"mutation", "public", any[], number>,
   sampleShards?: number
 ) {
   const [timeOffset, setTimeOffset] = useState<number>(0);
+  const [clientStartTime] = useState<number>(Date.now());
+  const [elapsedClientTime, setElapsedClientTime] = useState<number>(0);
+  
+  const getServerTime = useMutation(getServerTimeMutation);
+  
+  useEffect(() => {
+    const clientTime = Date.now();
+    getServerTime().then(serverTime => {
+      setTimeOffset(serverTime - clientTime);
+    });
+  }, [getServerTime]);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsedClientTime(Date.now() - clientStartTime);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [clientStartTime]);
   
   const rateLimitData = useQuery(getRateLimitQuery, { sampleShards });
   
-  useEffect(() => {
-    if (rateLimitData?.ts) {
-      const clientTime = Date.now();
-      const serverTime = rateLimitData.ts;
-      setTimeOffset(serverTime - clientTime);
+  const getCurrentServerTime = useCallback(() => {
+    return Date.now() + timeOffset;
+  }, [timeOffset]);
+  
+  const calculateCurrentValue = useCallback(() => {
+    if (!rateLimitData) return null;
+    
+    const { value, ts, config } = rateLimitData;
+    const currentServerTime = getCurrentServerTime();
+    const timeSinceUpdate = currentServerTime - ts;
+    
+    if (config.kind === "token bucket") {
+      const rate = config.rate / config.period;
+      const tokensAdded = Math.max(0, Math.floor(timeSinceUpdate * rate / 1000));
+      const capacity = config.capacity || config.rate;
+      return Math.min(capacity, value + tokensAdded);
+    } else {
+      const windowStart = rateLimitData.windowStart || ts;
+      const elapsedWindows = Math.floor((currentServerTime - windowStart) / config.period);
+      if (elapsedWindows > 0) {
+        return config.rate; // New window, full rate limit
+      }
+      return value; // Same window, same value
     }
-  }, [rateLimitData?.ts]);
+  }, [rateLimitData, getCurrentServerTime]);
   
   const getValue = useCallback(() => {
     if (!rateLimitData) return null;
-    return rateLimitData.value;
-  }, [rateLimitData]);
+    return calculateCurrentValue();
+  }, [rateLimitData, calculateCurrentValue]);
   
   const retryAt = useCallback((count = 1) => {
     if (!rateLimitData) return null;
     
-    const { value, ts, config } = rateLimitData;
-    const now = Date.now() + timeOffset; // Adjust for clock skew
+    const currentValue = calculateCurrentValue();
+    if (!currentValue || currentValue >= count) return null;
     
-    if (value >= count) {
-      return null;
-    }
+    const { ts, config } = rateLimitData;
+    const currentServerTime = getCurrentServerTime();
     
     if (config.kind === "token bucket") {
       const rate = config.rate / config.period;
-      const neededValue = count - value;
-      return ts + (neededValue / rate);
+      const neededValue = count - currentValue;
+      const serverRetryTime = currentServerTime + (neededValue / rate) * 1000;
+      return serverRetryTime - timeOffset;
     } else {
       const windowStart = rateLimitData.windowStart || ts;
-      const elapsedWindows = Math.floor((now - windowStart) / config.period);
-      const currentWindowEnd = windowStart + (elapsedWindows + 1) * config.period;
-      return currentWindowEnd;
+      const windowDuration = config.period;
+      const currentWindowEnd = windowStart + Math.ceil((currentServerTime - windowStart) / windowDuration) * windowDuration;
+      return currentWindowEnd - timeOffset;
     }
-  }, [rateLimitData, timeOffset]);
+  }, [rateLimitData, calculateCurrentValue, getCurrentServerTime, timeOffset]);
   
   const status = useMemo(() => {
     if (!rateLimitData) {

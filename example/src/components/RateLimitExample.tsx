@@ -3,7 +3,17 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 const useRateLimitMock = (initialValue = 10, maxValue = 10, refillRate = 1) => {
   const [value, setValue] = useState(initialValue);
   const [, setLastUpdate] = useState(Date.now());
-  const [timeOffset] = useState(0); // In a real app, this would be calculated from server time
+  const [timeOffset, setTimeOffset] = useState(0);
+  const [clientStartTime] = useState(Date.now());
+  
+  useEffect(() => {
+    const clientTime = Date.now();
+    setTimeout(() => {
+      const simulatedServerTime = Date.now() + 50; // Add 50ms to simulate clock skew
+      setTimeOffset(simulatedServerTime - clientTime);
+      console.log(`Clock skew detected: ${simulatedServerTime - clientTime}ms`);
+    }, 200);
+  }, []);
   
   useEffect(() => {
     const interval = setInterval(() => {
@@ -12,6 +22,10 @@ const useRateLimitMock = (initialValue = 10, maxValue = 10, refillRate = 1) => {
     }, 1000);
     return () => clearInterval(interval);
   }, [maxValue, refillRate]);
+  
+  const getCurrentServerTime = useCallback(() => {
+    return Date.now() + timeOffset;
+  }, [timeOffset]);
   
   const getValue = useCallback(() => {
     return value;
@@ -22,8 +36,10 @@ const useRateLimitMock = (initialValue = 10, maxValue = 10, refillRate = 1) => {
     
     const neededTokens = count - value;
     const timeToRefill = (neededTokens / refillRate) * 1000;
-    return Date.now() + timeOffset + timeToRefill;
-  }, [value, refillRate, timeOffset]);
+    
+    const serverRetryTime = getCurrentServerTime() + timeToRefill;
+    return serverRetryTime - timeOffset;
+  }, [value, refillRate, timeOffset, getCurrentServerTime]);
   
   const status = useMemo(() => {
     const retryTime = retryAt(1);
