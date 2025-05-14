@@ -169,14 +169,12 @@ export class RateLimiter<
   async getValue<Name extends string = keyof Limits & string>(
     ctx: RunQueryCtx,
     name: Name,
-    ...options: Name extends keyof Limits & string
-      ? [(RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }) | undefined]
-      : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number }]
+    options?: (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number })
   ) {
     return ctx.runQuery(this.component.lib.getValue, {
-      ...options[0],
+      ...options,
       name,
-      config: this.getConfig(options[0], name),
+      config: this.getConfig(options, name),
     });
   }
   
@@ -210,7 +208,7 @@ export class RateLimiter<
           args: { sampleShards?: number }
         ) => {
           const options = args.sampleShards ? { sampleShards: args.sampleShards } : undefined;
-          return this.getValue(ctx, name, ...[options]);
+          return this.getValue(ctx, name, options);
         }
       })
     };
