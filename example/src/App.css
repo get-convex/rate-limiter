@@ -1,0 +1,137 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Rate Limiter Example Styles */
+.example-container {
+  margin-top: 2rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1.5rem;
+  background-color: #f9f9f9;
+}
+
+.rate-limit-example {
+  text-align: left;
+}
+
+.rate-limit-example h2 {
+  color: #333;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.status-panel, .actions-panel, .explanation {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  border-radius: 6px;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.status-panel h3, .actions-panel h3, .explanation h3 {
+  color: #646cff;
+  margin-bottom: 1rem;
+}
+
+.token-input {
+  margin-bottom: 1rem;
+}
+
+.token-input label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.token-input input {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 100px;
+}
+
+button {
+  background-color: #646cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #535bf2;
+}
+
+button:disabled {
+  background-color: #a5a6f6;
+  cursor: not-allowed;
+}
+
+.retry-info {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.explanation {
+  background-color: #f0f0ff;
+}
+
+.explanation code {
+  background-color: #e0e0ff;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.explanation ul {
+  padding-left: 1.5rem;
+}
+
+.explanation li {
+  margin-bottom: 0.5rem;
+}

@@ -4,8 +4,9 @@ import {
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
+  queryGeneric,
 } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { api } from "../component/_generated/api.js"; // the component's public api
 import {
   RateLimitArgs,
@@ -27,7 +28,7 @@ export const HOUR = 60 * MINUTE;
 export function isRateLimitError(
   error: unknown
 ): error is { data: RateLimitError } {
-  return error instanceof ConvexError && error.data["kind"] === "RateLimited";
+  return error instanceof ConvexError && (error as any).data["kind"] === "RateLimited";
 }
 
 /**
@@ -152,6 +153,65 @@ export class RateLimiter<
       ...(args ?? null),
       name,
     });
+  }
+  
+  /**
+   * Get the current value and metadata of a rate limit.
+   * This function returns the current token utilization data without consuming any tokens.
+   * 
+   * @param ctx The ctx object from a query, including runQuery.
+   * @param name The name of the rate limit.
+   * @param options The rate limit arguments. `config` is required if the rate
+   * limit was not defined in {@link RateLimiter}. See {@link RateLimitArgs}.
+   * @returns An object containing the current value, timestamp, window start time (for fixed window),
+   * and the rate limit configuration.
+   */
+  async getValue<Name extends string = keyof Limits & string>(
+    ctx: RunQueryCtx,
+    name: Name,
+    options?: (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number })
+  ) {
+    return ctx.runQuery(this.component.lib.getValue, {
+      ...options,
+      name,
+      config: this.getConfig(options, name),
+    });
+  }
+  
+  /**
+   * Creates a getter function that can be exported from your API.
+   * This is a convenience function to re-export the query for client use.
+   * 
+   * @param name The name of the rate limit.
+   * @returns An object containing a getRateLimit function that can be exported.
+   * 
+   * Example:
+   * ```ts
+   * // In your API file:
+   * export const { getRateLimit } = rateLimiter.getter("myLimit");
+   * 
+   * // In your client:
+   * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
+   * ```
+   */
+  getter<Name extends string = keyof Limits & string>(
+    name: Name
+  ) {
+    const rateLimiter = this;
+    return {
+      getRateLimit: queryGeneric({
+        args: {
+          sampleShards: v.optional(v.number()),
+        },
+        handler: async (
+          ctx: GenericQueryCtx<GenericDataModel>,
+          args: { sampleShards?: number }
+        ) => {
+          const options = args.sampleShards ? { sampleShards: args.sampleShards } : undefined;
+          return this.getValue(ctx, name, options);
+        }
+      })
+    };
   }
 
   private getConfig<Name extends string>(

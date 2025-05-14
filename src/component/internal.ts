@@ -168,7 +168,7 @@ async function checkShard(
   return { ...result, shard, existing };
 }
 
-async function getShard(
+export async function getShard(
   db: DatabaseReader,
   name: string,
   key: string | undefined,
@@ -195,13 +195,16 @@ function shardConfig(config: RateLimitConfig, shards: number) {
   return sharded;
 }
 
-export function _checkRateLimitInternal(
+/**
+ * Calculate rate limit values based on the current state and configuration.
+ * This function is exported so it can be used in both client and server code.
+ */
+export function calculateRateLimit(
   existing: { value: number; ts: number } | null,
   config: RateLimitConfig,
-  count: number = 1,
-  reserve: boolean = false
+  now: number = Date.now(),
+  count: number = 1
 ) {
-  const now = Date.now();
   const max = config.capacity ?? config.rate;
   const state = existing ?? {
     value: max,
@@ -210,9 +213,12 @@ export function _checkRateLimitInternal(
         ? config.start ?? Math.floor(Math.random() * config.period)
         : now,
   };
-  let ts,
-    value,
-    retryAfter: number | undefined = undefined;
+  
+  let ts: number;
+  let value: number;
+  let retryAfter: number | undefined = undefined;
+  let windowStart: number | undefined = undefined;
+  
   if (config.kind === "token bucket") {
     const elapsed = now - state.ts;
     const rate = config.rate / config.period;
@@ -222,7 +228,8 @@ export function _checkRateLimitInternal(
       retryAfter = -value / rate;
     }
   } else {
-    const elapsedWindows = Math.floor((Date.now() - state.ts) / config.period);
+    windowStart = state.ts;
+    const elapsedWindows = Math.floor((now - state.ts) / config.period);
     const rate = config.rate;
     value = Math.min(state.value + rate * elapsedWindows, max) - count;
     ts = state.ts + elapsedWindows * config.period;
@@ -231,6 +238,19 @@ export function _checkRateLimitInternal(
       retryAfter = ts + config.period * windowsNeeded - now;
     }
   }
+  
+  return { value, ts, retryAfter, windowStart };
+}
+
+export function _checkRateLimitInternal(
+  existing: { value: number; ts: number } | null,
+  config: RateLimitConfig,
+  count: number = 1,
+  reserve: boolean = false
+) {
+  const now = Date.now();
+  const { value, ts, retryAfter } = calculateRateLimit(existing, config, now, count);
+  
   if (value < 0) {
     if (!reserve || (config.maxReserved && -value > config.maxReserved)) {
       return {
