@@ -7,7 +7,7 @@ import { v } from "convex/values";
  * 
  * @returns The current server time (Date.now())
  */
-export const getServerTime: any = mutation({
+export const getServerTime = mutation({
   args: {},
   returns: v.number(),
   handler: async (): Promise<number> => {

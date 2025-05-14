@@ -208,7 +208,7 @@ export class RateLimiter<
    * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
    * ```
    */
-  publicApi<Name extends string = keyof Limits & string>(
+  getter<Name extends string = keyof Limits & string>(
     name: Name,
     ...options: Name extends keyof Limits & string
       ? [
