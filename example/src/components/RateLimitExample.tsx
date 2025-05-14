@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useRateLimit } from '../../../src/client/react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { useRateLimit } from '../../../src/client/react';
 
 export const RateLimitExample = () => {
   const [count, setCount] = useState(1);
@@ -10,22 +10,22 @@ export const RateLimitExample = () => {
   const consumeTokensMutation = useMutation(api.example.consumeTokens);
   const { status, getValue, retryAt } = useRateLimit(api.example.getRateLimit, api.example.getServerTime);
   
-  const handleConsume = () => {
+  const handleConsume = useCallback(() => {
     if (status.ok) {
       consumeTokensMutation({ count })
         .then(() => {
           setConsumedTokens(prev => prev + count);
         })
-        .catch(error => {
+        .catch((error: Error) => {
           console.error("Failed to consume tokens:", error);
         });
     }
-  };
+  }, [status.ok, consumeTokensMutation, count, setConsumedTokens]);
   
-  const formatTime = (timestamp: number | null) => {
+  const formatTime = useCallback((timestamp: number | null) => {
     if (!timestamp) return 'N/A';
     return new Date(timestamp).toLocaleTimeString();
-  };
+  }, []);
   
   return (
     <div className="rate-limit-example">
