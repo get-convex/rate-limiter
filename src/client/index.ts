@@ -206,10 +206,10 @@ export class RateLimiter<
           ctx: GenericQueryCtx<GenericDataModel>,
           args: { sampleShards?: number }
         ) => {
-          const options = args.sampleShards !== undefined ? { sampleShards: args.sampleShards } : undefined;
+          const options = args.sampleShards !== undefined ? { sampleShards: args.sampleShards } : {};
           return ctx.runQuery(this.component.lib.getValue, {
             name,
-            ...(options || {}),
+            ...options,
             config: this.getConfig(undefined, name),
           });
         }
