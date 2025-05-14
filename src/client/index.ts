@@ -210,7 +210,7 @@ export class RateLimiter<
           args: { sampleShards?: number }
         ) => {
           const options = args.sampleShards ? { sampleShards: args.sampleShards } : undefined;
-          return rateLimiter.getValue(ctx, name, [options] as any);
+          return this.getValue(ctx, name, options);
         }
       })
     };

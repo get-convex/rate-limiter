@@ -14,8 +14,21 @@ import { FunctionReference } from "convex/server";
  *   - getValue: A function that returns the current value of the rate limit
  *   - retryAt: A function that returns the time when the rate limit will reset
  */
-export function useRateLimit<Args extends any[], Return>(
-  getRateLimitQuery: FunctionReference<"query", "public", Args, Return>,
+export function useRateLimit(
+  getRateLimitQuery: FunctionReference<"query", "public", any[], {
+    value: number;
+    ts: number;
+    windowStart?: number;
+    config: {
+      kind: "token bucket" | "fixed window";
+      rate: number;
+      period: number;
+      capacity?: number;
+      maxReserved?: number;
+      shards?: number;
+      start?: number;
+    };
+  }>,
   sampleShards?: number
 ) {
   const [timeOffset, setTimeOffset] = useState<number>(0);
