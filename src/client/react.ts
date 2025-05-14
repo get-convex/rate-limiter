@@ -16,7 +16,7 @@ import { FunctionReference } from "convex/server";
  *   - retryAt: A function that returns the time when the rate limit will reset
  */
 export function useRateLimit(
-  getRateLimitQuery: FunctionReference<"query", "public", any[], {
+  getRateLimitQuery: FunctionReference<"query", "public", { sampleShards?: number }, {
     value: number;
     ts: number;
     windowStart?: number;
@@ -30,7 +30,7 @@ export function useRateLimit(
       start?: number;
     };
   }>,
-  getServerTimeMutation: FunctionReference<"mutation", "public", any[], number>,
+  getServerTimeMutation: FunctionReference<"mutation", "public", {}, number>,
   sampleShards?: number
 ) {
   const [timeOffset, setTimeOffset] = useState<number>(0);
@@ -41,7 +41,7 @@ export function useRateLimit(
   
   useEffect(() => {
     const clientTime = Date.now();
-    getServerTime().then((serverTime: number) => {
+    getServerTime({}).then((serverTime: number) => {
       setTimeOffset(serverTime - clientTime);
     });
   }, [getServerTime]);
@@ -53,7 +53,7 @@ export function useRateLimit(
     return () => clearInterval(interval);
   }, [clientStartTime]);
   
-  const rateLimitData = useQuery(getRateLimitQuery, { sampleShards });
+  const rateLimitData = useQuery(getRateLimitQuery, sampleShards !== undefined ? { sampleShards } : "skip");
   
   const getCurrentServerTime = useCallback(() => {
     return Date.now() + timeOffset;
