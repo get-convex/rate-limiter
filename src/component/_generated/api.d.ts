@@ -1,5 +1,3 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
  * Generated `api` utility.
@@ -12,12 +10,14 @@
 
 import type * as internal_ from "../internal.js";
 import type * as lib from "../lib.js";
+import type * as time from "../time.js";
 
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
+
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -29,6 +29,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   internal: typeof internal_;
   lib: typeof lib;
+  time: typeof time;
 }>;
 export type Mounts = {
   lib: {
@@ -68,6 +69,51 @@ export type Mounts = {
       { before?: number },
       null
     >;
+    getServerTime: FunctionReference<"mutation", "public", {}, number>;
+    getValue: FunctionReference<
+      "query",
+      "public",
+      {
+        config:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        count?: number;
+        key?: string;
+        name: string;
+        reserve?: boolean;
+        sampleShards?: number;
+        throws?: boolean;
+      },
+      {
+        config: {
+          capacity?: number;
+          kind: "token bucket" | "fixed window";
+          maxReserved?: number;
+          period: number;
+          rate: number;
+          shards?: number;
+          start?: number;
+        };
+        ts: number;
+        value: number;
+        windowStart?: number;
+      }
+    >;
     rateLimit: FunctionReference<
       "mutation",
       "public",
@@ -105,6 +151,9 @@ export type Mounts = {
       null
     >;
   };
+  time: {
+    getServerTime: FunctionReference<"mutation", "public", {}, number>;
+  };
 };
 // For now fullApiWithMounts is only fullApi which provides
 // jump-to-definition in component client code.
@@ -121,5 +170,3 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {};
-
-/* prettier-ignore-end */

@@ -1,5 +1,3 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
  * Generated `api` utility.
@@ -17,6 +15,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+
 /**
  * A utility for referencing Convex functions in your app's API.
  *
@@ -78,6 +77,51 @@ export declare const components: {
         { before?: number },
         null
       >;
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getValue: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          sampleShards?: number;
+          throws?: boolean;
+        },
+        {
+          config: {
+            capacity?: number;
+            kind: "token bucket" | "fixed window";
+            maxReserved?: number;
+            period: number;
+            rate: number;
+            shards?: number;
+            start?: number;
+          };
+          ts: number;
+          value: number;
+          windowStart?: number;
+        }
+      >;
       rateLimit: FunctionReference<
         "mutation",
         "internal",
@@ -115,7 +159,8 @@ export declare const components: {
         null
       >;
     };
+    time: {
+      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+    };
   };
 };
-
-/* prettier-ignore-end */

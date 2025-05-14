@@ -3,7 +3,6 @@
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.*", "../src/package.json"],
   "compilerOptions": {
-    "outDir": "./dist/esm",
-    "types": ["node", "react"]
+    "outDir": "./dist/esm"
   }
 }

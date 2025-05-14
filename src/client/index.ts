@@ -7,7 +7,7 @@ import {
   queryGeneric,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import type { api } from "../component/_generated/api.js"; // the component's public api
+import type { api, Mounts } from "../component/_generated/api.js"; // the component's public api
 import {
   RateLimitArgs,
   RateLimitConfig,
@@ -28,7 +28,11 @@ export const HOUR = 60 * MINUTE;
 export function isRateLimitError(
   error: unknown
 ): error is { data: RateLimitError } {
-  return error instanceof ConvexError && (error as any).data["kind"] === "RateLimited";
+  return (
+    error instanceof ConvexError &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (error as any).data["kind"] === "RateLimited"
+  );
 }
 
 /**
@@ -60,7 +64,7 @@ export class RateLimiter<
   Limits extends Record<string, RateLimitConfig> = Record<never, never>,
 > {
   constructor(
-    public component: RateLimiterApi,
+    public component: UseApi<Mounts>,
     public limits?: Limits
   ) {}
 
@@ -154,11 +158,11 @@ export class RateLimiter<
       name,
     });
   }
-  
+
   /**
    * Get the current value and metadata of a rate limit.
    * This function returns the current token utilization data without consuming any tokens.
-   * 
+   *
    * @param ctx The ctx object from a query, including runQuery.
    * @param name The name of the rate limit.
    * @param options The rate limit arguments. `config` is required if the rate

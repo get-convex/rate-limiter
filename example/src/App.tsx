@@ -5,8 +5,6 @@ import './App.css'
 import RateLimitExample from './components/RateLimitExample'
 
 function App() {
-  const [showExample, setShowExample] = useState(false)
-
   return (
     <>
       <div>
@@ -19,21 +17,16 @@ function App() {
       </div>
       <h1>Rate Limiter Example</h1>
       <div className="card">
-        <button onClick={() => setShowExample(!showExample)}>
-          {showExample ? 'Hide' : 'Show'} Rate Limiter Example
-        </button>
-        
-        {showExample && (
-          <div className="example-container">
-            <RateLimitExample />
-          </div>
-        )}
+        <div className="example-container">
+          <RateLimitExample />
+        </div>
       </div>
       <p className="read-the-docs">
-        This example demonstrates the useRateLimit hook from the rate-limiter component
+        This example demonstrates the useRateLimit hook from the rate-limiter
+        component
       </p>
     </>
-  )
+  );
 }
 
 export default App
