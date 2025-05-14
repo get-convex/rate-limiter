@@ -7,7 +7,7 @@ import { mutation } from "./_generated/server.js";
  * @returns The current server time (Date.now())
  */
 export const getServerTime = mutation({
-  handler: async () => {
+  handler: async (): Promise<number> => {
     return Date.now();
   },
 });

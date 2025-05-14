@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { FunctionReference, MutationReference } from "convex/server";
+import { FunctionReference } from "convex/server";
 
 /**
  * A hook for using rate limits in React components.
@@ -30,7 +30,7 @@ export function useRateLimit(
       start?: number;
     };
   }>,
-  getServerTimeMutation: MutationReference<"mutation", "public", any[], number>,
+  getServerTimeMutation: FunctionReference<"mutation", "public", any[], number>,
   sampleShards?: number
 ) {
   const [timeOffset, setTimeOffset] = useState<number>(0);
@@ -41,7 +41,7 @@ export function useRateLimit(
   
   useEffect(() => {
     const clientTime = Date.now();
-    getServerTime().then(serverTime => {
+    getServerTime().then((serverTime: number) => {
       setTimeOffset(serverTime - clientTime);
     });
   }, [getServerTime]);
