@@ -173,51 +173,70 @@ export class RateLimiter<
   async getValue<Name extends string = keyof Limits & string>(
     ctx: RunQueryCtx,
     name: Name,
-    options?: (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & { sampleShards?: number })
+    ...options: Name extends keyof Limits & string
+      ? [
+          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          })?,
+        ]
+      : [
+          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          },
+        ]
   ) {
     return ctx.runQuery(this.component.lib.getValue, {
-      ...options,
+      ...options[0],
       name,
-      config: this.getConfig(options, name),
+      config: this.getConfig(options[0], name),
     });
   }
-  
+
   /**
    * Creates a getter function that can be exported from your API.
    * This is a convenience function to re-export the query for client use.
-   * 
+   *
    * @param name The name of the rate limit.
    * @returns An object containing a getRateLimit function that can be exported.
-   * 
+   *
    * Example:
    * ```ts
    * // In your API file:
    * export const { getRateLimit } = rateLimiter.getter("myLimit");
-   * 
+   *
    * // In your client:
    * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
    * ```
    */
-  getter<Name extends string = keyof Limits & string>(
-    name: Name
+  publicApi<Name extends string = keyof Limits & string>(
+    name: Name,
+    ...options: Name extends keyof Limits & string
+      ? [
+          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          })?,
+        ]
+      : [
+          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          },
+        ]
   ) {
     return {
       getRateLimit: queryGeneric({
         args: {
+          key: v.optional(v.string()),
           sampleShards: v.optional(v.number()),
         },
-        handler: async (
-          ctx: GenericQueryCtx<GenericDataModel>,
-          args: { sampleShards?: number }
-        ) => {
-          const options = args.sampleShards !== undefined ? { sampleShards: args.sampleShards } : {};
+        handler: async (ctx, args) => {
           return ctx.runQuery(this.component.lib.getValue, {
+            ...options[0],
+            ...args,
             name,
-            ...options,
-            config: this.getConfig(undefined, name),
+            config: this.getConfig(options[0], name),
           });
-        }
-      })
+        },
+      }),
     };
   }
 
