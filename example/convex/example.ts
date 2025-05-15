@@ -13,7 +13,6 @@ import {
   internalMutation,
   internalQuery,
   mutation,
-  query,
 } from "./_generated/server";
 
 const rateLimiter = new RateLimiter(components.rateLimiter, {
@@ -25,14 +24,7 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   demoLimit: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
 });
 
-export const getRateLimit = query({
-  args: {
-    sampleShards: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    return rateLimiter.getValue(ctx, "demoLimit", args);
-  },
-});
+export const getRateLimit = rateLimiter.getValueQuery("demoLimit");
 
 export const consumeTokens = mutation({
   args: {

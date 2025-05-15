@@ -193,7 +193,8 @@ export class RateLimiter<
   }
 
   /**
-   * Creates a getter function that can be exported from your API.
+   * Creates a public query that can be exported from your API that returns the
+   * current value of a rate limit.
    * This is a convenience function to re-export the query for client use.
    *
    * @param name The name of the rate limit.
@@ -202,14 +203,25 @@ export class RateLimiter<
    * Example:
    * ```ts
    * // In your API file:
-   * export const { getRateLimit } = rateLimiter.getter("myLimit");
+   * export const getRateLimit = rateLimiter.getValueQuery("myLimit");
    *
    * // In your client:
    * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
    * ```
    */
-  getter<Name extends string = keyof Limits & string>(
-    name: Name
+  getValueQuery<Name extends string = keyof Limits & string>(
+    name: Name,
+    ...options: Name extends keyof Limits & string
+      ? [
+          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          })?,
+        ]
+      : [
+          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
+            sampleShards?: number;
+          },
+        ]
   ) {
     return {
       getRateLimit: queryGeneric({
@@ -219,9 +231,10 @@ export class RateLimiter<
         },
         handler: async (ctx, args) => {
           return ctx.runQuery(this.component.lib.getValue, {
+            ...options[0],
             ...args,
             name,
-            config: this.getConfig(undefined, name),
+            config: this.getConfig(options[0], name),
           });
         },
       }),
