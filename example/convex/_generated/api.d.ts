@@ -9,6 +9,7 @@
  */
 
 import type * as example from "../example.js";
+import type * as loadTest from "../loadTest.js";
 
 import type {
   ApiFromModules,
@@ -26,6 +27,7 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   example: typeof example;
+  loadTest: typeof loadTest;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 
