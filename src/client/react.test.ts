@@ -3,25 +3,12 @@
  */
 
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
-import { useRateLimit } from "./react.js";
+import { useRateLimit, type GetRateLimitValueQuery } from "./react.js";
 import { renderHook, act } from "@testing-library/react";
 import { useQuery, useConvex } from "convex/react";
-import type { FunctionReference } from "convex/server";
 import type { GetValueReturns } from "../shared.js";
 
 // Type for the useRateLimit args to match what's in react.ts
-type UseRateLimitArgs = {
-  name?: string;
-  key?: string;
-  count?: number;
-  sampleShards?: number;
-  getServerTimeMutation?: FunctionReference<
-    "mutation",
-    "public",
-    Record<string, never>,
-    number
-  >;
-};
 
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
@@ -44,12 +31,7 @@ describe("useRateLimit", () => {
   });
 
   test("returns correct status when rate limit is available", () => {
-    const mockQuery = {} as FunctionReference<
-      "query",
-      "public",
-      UseRateLimitArgs,
-      GetValueReturns
-    >;
+    const mockQuery = {} as GetRateLimitValueQuery;
     const mockRateLimitData: GetValueReturns = {
       value: 8,
       ts: Date.now(),
@@ -71,12 +53,7 @@ describe("useRateLimit", () => {
   });
 
   test("returns correct status when rate limit is exceeded", () => {
-    const mockQuery = {} as FunctionReference<
-      "query",
-      "public",
-      UseRateLimitArgs,
-      GetValueReturns
-    >;
+    const mockQuery = {} as GetRateLimitValueQuery;
     const now = Date.now();
     const mockRateLimitData: GetValueReturns = {
       value: 0,
@@ -101,12 +78,7 @@ describe("useRateLimit", () => {
   test("handles clock skew correctly", () => {
     vi.useFakeTimers();
 
-    const mockQuery = {} as FunctionReference<
-      "query",
-      "public",
-      UseRateLimitArgs,
-      GetValueReturns
-    >;
+    const mockQuery = {} as GetRateLimitValueQuery;
     const serverTime = Date.now() + 5000; // Server is 5 seconds ahead
     const mockRateLimitData: GetValueReturns = {
       value: 5,
@@ -139,12 +111,7 @@ describe("useRateLimit", () => {
   });
 
   test("handles fixed window rate limits correctly", () => {
-    const mockQuery = {} as FunctionReference<
-      "query",
-      "public",
-      UseRateLimitArgs,
-      GetValueReturns
-    >;
+    const mockQuery = {} as GetRateLimitValueQuery;
     const now = Date.now();
     const windowStart = now - 30000; // Window started 30 seconds ago
     const mockRateLimitData: GetValueReturns = {

@@ -16,7 +16,7 @@ import type {
   RateLimitReturns,
   GetValueReturns,
 } from "../shared.js";
-import { getValueReturns } from "../shared.js";
+import { getValueArgs, getValueReturns } from "../shared.js";
 export type {
   RateLimitArgs,
   RateLimitConfig,
@@ -248,22 +248,7 @@ export class RateLimiter<
   ) {
     return {
       getRateLimit: queryGeneric({
-        args: {
-          /**
-           * The name of the rate limit.
-           * If provided, this will override the name passed to {@link hookAPI}. */
-          name: v.optional(v.string()),
-          /**
-           * The key of the rate limit.
-           * If not provided, the default is the shared rate limit value.
-           */
-          key: v.optional(v.string()),
-          /**
-           * The number of shards to sample, if the rate limit is sharded.
-           * If not provided, the default is 1.
-           */
-          sampleShards: v.optional(v.number()),
-        },
+        args: getValueArgs,
         returns: getValueReturns,
         handler: async (ctx, args): Promise<GetValueReturns> => {
           const finalName = args.name ?? name;

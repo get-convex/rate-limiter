@@ -1,20 +1,34 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { useQuery, useConvex } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { calculateRateLimit, type GetValueReturns } from "../shared";
+import {
+  calculateRateLimit,
+  type GetValueArgs,
+  type GetValueReturns,
+} from "../shared";
 
-type UseRateLimitArgs = {
+export type UseRateLimitOptions = {
   name?: string;
   key?: string;
   count?: number;
   sampleShards?: number;
-  getServerTimeMutation?: FunctionReference<
-    "mutation",
-    "public",
-    Record<string, never>,
-    number
-  >;
+  getServerTimeMutation?: GetServerTimeMutation;
 };
+
+export type GetRateLimitValueQuery = FunctionReference<
+  "query",
+  "public",
+  GetValueArgs,
+  GetValueReturns
+>;
+
+export type GetServerTimeMutation = FunctionReference<
+  "mutation",
+  "public",
+  Record<string, never>,
+  number
+>;
+
 /**
  * A hook for using rate limits in React components.
  * This hook provides information about the current rate limit status,
@@ -25,17 +39,13 @@ type UseRateLimitArgs = {
  * @param sampleShards Optional number of shards to sample (default: 1)
  * @returns An object containing:
  *   - status: The current status of the rate limit (ok, retryAt)
- *   - getValue: A function that returns the current value of the rate limit
- *   - retryAt: A function that returns the time when the rate limit will reset
+ *     If the rate limit value is below the count (or 0 if unspecified), the
+ *     retryAt will be set to the time when the client can retry.
+ *   - checkValue: A function that returns the current value of the rate limit
  */
 export function useRateLimit(
-  getRateLimitValueQuery: FunctionReference<
-    "query",
-    "public",
-    UseRateLimitArgs,
-    GetValueReturns
-  >,
-  opts?: UseRateLimitArgs
+  getRateLimitValueQuery: GetRateLimitValueQuery,
+  opts?: UseRateLimitOptions
 ) {
   // This is the offset between the client and server time.
   // clientTime + timeOffset = serverTime
@@ -57,7 +67,11 @@ export function useRateLimit(
   }, [convex, getServerTimeMutation]);
 
   // Based on server time
-  const rateLimitData = useQuery(getRateLimitValueQuery, args);
+  const rateLimitData = useQuery(getRateLimitValueQuery, {
+    name: args.name,
+    key: args.key,
+    sampleShards: args.sampleShards,
+  });
 
   // Takes in and exposes client time
   const checkValue = useCallback(

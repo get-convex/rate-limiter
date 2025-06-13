@@ -105,6 +105,14 @@ export type RateLimitError = {
   retryAfter: number;
 };
 
+export const getValueArgs = v.object({
+  name: v.optional(v.string()),
+  key: v.optional(v.string()),
+  sampleShards: v.optional(v.number()),
+});
+
+export type GetValueArgs = Infer<typeof getValueArgs>;
+
 export const getValueReturns = v.object({
   value: v.number(),
   ts: v.number(),
