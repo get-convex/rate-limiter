@@ -1,8 +1,8 @@
-
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import RateLimitExample from './components/RateLimitExample'
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
+import "./App.css";
+import RateLimitExample from "./components/RateLimitExample";
+import Playground from "./components/Playground";
 
 function App() {
   return (
@@ -15,18 +15,20 @@ function App() {
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
-      <h1>Rate Limiter Example</h1>
+      <h1>Rate Limiter Examples</h1>
       <div className="card">
         <div className="example-container">
+          <Playground />
+          <hr style={{ margin: "40px 0", border: "1px solid #ddd" }} />
           <RateLimitExample />
         </div>
       </div>
       <p className="read-the-docs">
-        This example demonstrates the useRateLimit hook from the rate-limiter
-        component
+        These examples demonstrate the rate-limiter component with interactive
+        visualization and basic usage patterns
       </p>
     </>
   );
 }
 
-export default App
+export default App;

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "run-p dev:*",
+    "dev": "run-p -r dev:*",
     "dev:frontend": "vite",
     "dev:backend": "convex dev --live-component-sources --typecheck-components",
     "logs": "convex logs",
