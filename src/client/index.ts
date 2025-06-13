@@ -9,12 +9,14 @@ import {
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Mounts } from "../component/_generated/api.js"; // the component's public api
-import {
+import type {
   RateLimitArgs,
   RateLimitConfig,
   RateLimitError,
   RateLimitReturns,
+  GetValueReturns,
 } from "../shared.js";
+import { getValueReturns } from "../shared.js";
 export type {
   RateLimitArgs,
   RateLimitConfig,
@@ -247,30 +249,29 @@ export class RateLimiter<
     return {
       getRateLimit: queryGeneric({
         args: {
+          /**
+           * The name of the rate limit.
+           * If provided, this will override the name passed to {@link hookAPI}. */
+          name: v.optional(v.string()),
+          /**
+           * The key of the rate limit.
+           * If not provided, the default is the shared rate limit value.
+           */
           key: v.optional(v.string()),
+          /**
+           * The number of shards to sample, if the rate limit is sharded.
+           * If not provided, the default is 1.
+           */
           sampleShards: v.optional(v.number()),
         },
-        returns: v.object({
-          config: v.object({
-            capacity: v.number(),
-            kind: v.string(),
-            maxReserved: v.optional(v.number()),
-            period: v.number(),
-            rate: v.number(),
-            shards: v.number(),
-            start: v.optional(v.number()),
-          }),
-          // undefined if there's no usage yet (in the sampled shards)
-          ts: v.optional(v.number()),
-          value: v.number(),
-          windowStart: v.optional(v.number()),
-        }),
-        handler: async (ctx, args) => {
+        returns: getValueReturns,
+        handler: async (ctx, args): Promise<GetValueReturns> => {
+          const finalName = args.name ?? name;
           return ctx.runQuery(this.component.lib.getValue, {
             ...options[0],
             ...args,
-            name,
-            config: this.getConfig(options[0], name),
+            name: finalName,
+            config: this.getConfig(options[0], finalName),
           });
         },
       }),

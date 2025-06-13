@@ -105,18 +105,27 @@ export declare const components: {
           sampleShards?: number;
         },
         {
-          config: {
-            capacity: number;
-            kind: "token bucket" | "fixed window";
-            maxReserved?: number;
-            period: number;
-            rate: number;
-            shards: number;
-            start?: number;
-          };
-          ts?: number;
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          shard: number;
+          ts: number;
           value: number;
-          windowStart?: number;
         }
       >;
       rateLimit: FunctionReference<

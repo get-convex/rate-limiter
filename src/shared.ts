@@ -103,6 +103,15 @@ export type RateLimitError = {
   retryAfter: number;
 };
 
+export const getValueReturns = v.object({
+  value: v.number(),
+  ts: v.number(),
+  shard: v.number(),
+  config: v.union(tokenBucketValidator, fixedWindowValidator),
+});
+
+export type GetValueReturns = Infer<typeof getValueReturns>;
+
 /**
  * Calculate rate limit values based on the current state and configuration.
  * This function is exported so it can be used in both client and server code.
@@ -121,12 +130,12 @@ export function calculateRateLimit(
         ? config.start ?? Math.floor(Math.random() * config.period)
         : now,
   };
-  
+
   let ts: number;
   let value: number;
   let retryAfter: number | undefined = undefined;
   let windowStart: number | undefined = undefined;
-  
+
   if (config.kind === "token bucket") {
     const elapsed = now - state.ts;
     const rate = config.rate / config.period;
@@ -146,6 +155,6 @@ export function calculateRateLimit(
       retryAfter = ts + config.period * windowsNeeded - now;
     }
   }
-  
+
   return { value, ts, retryAfter, windowStart };
 }

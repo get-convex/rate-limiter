@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import {
-  type RateLimitConfig,
   calculateRateLimit,
   fixedWindowValidator,
+  getValueReturns,
   rateLimitArgs,
   rateLimitReturns,
   tokenBucketValidator,
@@ -49,27 +49,13 @@ export const getValue = query({
     config: v.union(tokenBucketValidator, fixedWindowValidator),
     sampleShards: v.optional(v.number()),
   },
-  returns: v.object({
-    value: v.number(),
-    // undefined if there's no usage yet (in the sampled shards)
-    ts: v.optional(v.number()),
-    windowStart: v.optional(v.number()),
-    config: v.object({
-      kind: v.union(v.literal("token bucket"), v.literal("fixed window")),
-      rate: v.number(),
-      period: v.number(),
-      capacity: v.number(),
-      maxReserved: v.optional(v.number()),
-      shards: v.number(),
-      start: v.optional(v.number()),
-    }),
-  }),
+  returns: getValueReturns,
   handler: async (ctx, args) => {
     const config = configWithDefaults(args.config);
-    const samplesToTake = Math.min(args.sampleShards ?? 1, config.shards);
+    const samplesToTake = Math.min(args.sampleShards || 1, config.shards);
 
     const shardIndices = Array.from({ length: config.shards }, (_, i) => i);
-    const selectedShards = [];
+    const selectedShards: number[] = [];
 
     for (let i = 0; i < samplesToTake; i++) {
       if (shardIndices.length === 0) break;
@@ -78,41 +64,36 @@ export const getValue = query({
       shardIndices.splice(randomIndex, 1);
     }
 
-    // TODO: account for all the shards!?
     const allShards = (
       await Promise.all(
         selectedShards.map((shard) =>
           getShard(ctx.db, args.name, args.key, shard)
         )
       )
-    ).filter((shard) => shard !== null);
-
-    if (allShards.length === 0) {
-      const windowStart =
-        config.kind === "fixed window" ? config.start : undefined;
-
-      return {
-        value: config.capacity,
-        ts: undefined,
-        windowStart,
-        config,
-      };
-    }
+    ).map(
+      (state, i) =>
+        state ?? { value: config.capacity, ts: 0, shard: selectedShards[i]! }
+    );
 
     const maxTs = Math.max(...allShards.map((shard) => shard.ts));
     // we calculate the values as if each shard was at the latest ts
     // we avoid passing Date.now() so the query isn't too time-aware.
-    const values = allShards.map(
-      (shard) => calculateRateLimit(shard, config, maxTs, 0).value
+    const values = allShards.map((state) => ({
+      ...state,
+      maxTs: calculateRateLimit(state, config, maxTs, 0),
+    }));
+    const maxShard = values.reduce((a, b) =>
+      a.maxTs.value > b.maxTs.value ? a : b
     );
-    const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
-    const windowStart =
-      config.kind === "fixed window" ? config.start : undefined;
+    if (config.kind === "fixed window" && !config.start) {
+      // we can modify here b/c config is our copy
+      config.start = maxShard.maxTs.windowStart;
+    }
 
     return {
-      value: avgValue,
-      ts: maxTs,
-      windowStart,
+      value: maxShard.value,
+      ts: maxShard.ts,
+      shard: maxShard.shard,
       config,
     };
   },
