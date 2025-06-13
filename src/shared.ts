@@ -16,6 +16,7 @@ export const tokenBucketValidator = v.object({
   capacity: v.optional(v.number()),
   maxReserved: v.optional(v.number()),
   shards: v.optional(v.number()),
+  start: v.optional(v.null()),
 });
 
 /**

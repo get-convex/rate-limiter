@@ -53,6 +53,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;
@@ -90,6 +91,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;
@@ -113,6 +115,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;
@@ -140,6 +143,7 @@ export declare const components: {
                 period: number;
                 rate: number;
                 shards?: number;
+                start?: null;
               }
             | {
                 capacity?: number;

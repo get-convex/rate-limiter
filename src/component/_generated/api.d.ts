@@ -45,6 +45,7 @@ export type Mounts = {
               period: number;
               rate: number;
               shards?: number;
+              start?: null;
             }
           | {
               capacity?: number;
@@ -82,6 +83,7 @@ export type Mounts = {
               period: number;
               rate: number;
               shards?: number;
+              start?: null;
             }
           | {
               capacity?: number;
@@ -105,6 +107,7 @@ export type Mounts = {
               period: number;
               rate: number;
               shards?: number;
+              start?: null;
             }
           | {
               capacity?: number;
@@ -132,6 +135,7 @@ export type Mounts = {
               period: number;
               rate: number;
               shards?: number;
+              start?: null;
             }
           | {
               capacity?: number;
