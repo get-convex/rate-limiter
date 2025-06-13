@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useRateLimit } from "../../../src/client/react";
+import { useRateLimit } from "@convex-dev/rate-limiter/react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
