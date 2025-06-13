@@ -70,7 +70,7 @@ export function useRateLimit(
         rateLimitData,
         rateLimitData.config,
         serverTime,
-        count ?? 0
+        count
       );
       return {
         value: value.value,

@@ -122,14 +122,14 @@ export function calculateRateLimit(
   existing: { value: number; ts: number } | null,
   config: RateLimitConfig,
   now: number = Date.now(),
-  count: number = 1
+  count: number = 0
 ) {
   const max = config.capacity ?? config.rate;
   const state = existing ?? {
     value: max,
     ts:
       config.kind === "fixed window"
-        ? config.start ?? Math.floor(Math.random() * config.period)
+        ? config.start ?? now - Math.floor(Math.random() * config.period)
         : now,
   };
 

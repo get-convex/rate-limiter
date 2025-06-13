@@ -206,53 +206,6 @@ function shardConfig(config: RateLimitConfig, shards: number) {
   return sharded;
 }
 
-/**
- * Calculate rate limit values based on the current state and configuration.
- * This function is exported so it can be used in both client and server code.
- */
-export function calculateRateLimit(
-  existing: { value: number; ts: number } | null,
-  config: RateLimitConfig,
-  now: number = Date.now(),
-  count: number = 1
-) {
-  const max = config.capacity ?? config.rate;
-  const state = existing ?? {
-    value: max,
-    ts:
-      config.kind === "fixed window"
-        ? config.start ?? Math.floor(Math.random() * config.period)
-        : now,
-  };
-
-  let ts: number;
-  let value: number;
-  let retryAfter: number | undefined = undefined;
-  let windowStart: number | undefined = undefined;
-
-  if (config.kind === "token bucket") {
-    const elapsed = now - state.ts;
-    const rate = config.rate / config.period;
-    value = Math.min(state.value + elapsed * rate, max) - count;
-    ts = now;
-    if (value < 0) {
-      retryAfter = -value / rate;
-    }
-  } else {
-    windowStart = state.ts;
-    const elapsedWindows = Math.floor((now - state.ts) / config.period);
-    const rate = config.rate;
-    value = Math.min(state.value + rate * elapsedWindows, max) - count;
-    ts = state.ts + elapsedWindows * config.period;
-    if (value < 0) {
-      const windowsNeeded = Math.ceil(-value / rate);
-      retryAfter = ts + config.period * windowsNeeded - now;
-    }
-  }
-
-  return { value, ts, retryAfter, windowStart };
-}
-
 // exported for testing only
 export function _checkRateLimitInternal(
   existing: { value: number; ts: number } | null,

@@ -80,7 +80,7 @@ export const getValue = query({
     // we avoid passing Date.now() so the query isn't too time-aware.
     const values = allShards.map((state) => ({
       ...state,
-      maxTs: calculateRateLimit(state, config, maxTs, 0),
+      maxTs: calculateRateLimit(state, config, maxTs),
     }));
     const maxShard = values.reduce((a, b) =>
       a.maxTs.value > b.maxTs.value ? a : b
