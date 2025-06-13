@@ -40,8 +40,9 @@ async function checkRateLimitSharded(
   }[];
 }> {
   validateRequest(args);
-  const shards = Math.round(args.config.shards || 1);
-  const config = shardConfig(args.config, shards);
+  const unshardedConfig = configWithDefaults(args.config);
+  const { shards } = unshardedConfig;
+  const config = shardConfig(unshardedConfig, shards);
   const shardArgs = { ...args, config };
   const one = await checkShard(
     db,
@@ -125,18 +126,27 @@ async function checkRateLimitSharded(
   return { status: { ok, retryAfter }, updates };
 }
 
+export function configWithDefaults(config: RateLimitConfig) {
+  return {
+    ...config,
+    shards: Math.round(config.shards || 1),
+    capacity: config.capacity ?? config.rate,
+  };
+}
+
 // Sanity check that this could ever be satisfied
 function validateRequest(args: RateLimitArgs) {
-  const shards = args.config.shards ?? 1;
+  const config = configWithDefaults(args.config);
+  const { shards, capacity } = config;
   if (shards <= 0) {
     throw new Error("Shards must be a positive number");
   }
   const shardFactor = shards < MIN_CHOOSE_TWO ? 1 : shards / 2;
-  const max = (args.config.capacity ?? args.config.rate) / shardFactor;
+  const max = capacity / shardFactor;
   const count = args.count ?? 1;
   if (args.reserve) {
-    if (args.config.maxReserved) {
-      const maxReserved = args.config.maxReserved / shardFactor;
+    if (config.maxReserved) {
+      const maxReserved = config.maxReserved / shardFactor;
       if (count > max + maxReserved) {
         throw new Error(
           `Rate limit ${args.name} count ${count} exceeds ${(max + maxReserved).toFixed(2)}` +
@@ -213,12 +223,12 @@ export function calculateRateLimit(
         ? config.start ?? Math.floor(Math.random() * config.period)
         : now,
   };
-  
+
   let ts: number;
   let value: number;
   let retryAfter: number | undefined = undefined;
   let windowStart: number | undefined = undefined;
-  
+
   if (config.kind === "token bucket") {
     const elapsed = now - state.ts;
     const rate = config.rate / config.period;
@@ -238,10 +248,11 @@ export function calculateRateLimit(
       retryAfter = ts + config.period * windowsNeeded - now;
     }
   }
-  
+
   return { value, ts, retryAfter, windowStart };
 }
 
+// exported for testing only
 export function _checkRateLimitInternal(
   existing: { value: number; ts: number } | null,
   config: RateLimitConfig,
@@ -249,8 +260,13 @@ export function _checkRateLimitInternal(
   reserve: boolean = false
 ) {
   const now = Date.now();
-  const { value, ts, retryAfter } = calculateRateLimit(existing, config, now, count);
-  
+  const { value, ts, retryAfter } = calculateRateLimit(
+    existing,
+    config,
+    now,
+    count
+  );
+
   if (value < 0) {
     if (!reserve || (config.maxReserved && -value > config.maxReserved)) {
       return {

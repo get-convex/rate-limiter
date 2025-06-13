@@ -109,12 +109,12 @@ export declare const components: {
         },
         {
           config: {
-            capacity?: number;
+            capacity: number;
             kind: "token bucket" | "fixed window";
             maxReserved?: number;
             period: number;
             rate: number;
-            shards?: number;
+            shards: number;
             start?: number;
           };
           ts: number;

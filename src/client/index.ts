@@ -226,9 +226,25 @@ export class RateLimiter<
     return {
       getRateLimit: queryGeneric({
         args: {
+          count: v.optional(v.number()),
           key: v.optional(v.string()),
           sampleShards: v.optional(v.number()),
+          reserve: v.optional(v.boolean()),
         },
+        returns: v.object({
+          config: v.object({
+            capacity: v.number(),
+            kind: v.string(),
+            maxReserved: v.optional(v.number()),
+            period: v.number(),
+            rate: v.number(),
+            shards: v.number(),
+            start: v.optional(v.number()),
+          }),
+          ts: v.number(),
+          value: v.number(),
+          windowStart: v.optional(v.number()),
+        }),
         handler: async (ctx, args) => {
           return ctx.runQuery(this.component.lib.getValue, {
             ...options[0],
