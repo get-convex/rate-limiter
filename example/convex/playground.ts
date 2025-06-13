@@ -36,3 +36,10 @@ export const resetRateLimit = mutation({
     return rateLimiter.reset(ctx, "demo");
   },
 });
+
+export const getServerTime = mutation({
+  args: {},
+  handler: async () => {
+    return Date.now();
+  },
+});

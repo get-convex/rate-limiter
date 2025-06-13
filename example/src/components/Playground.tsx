@@ -42,6 +42,14 @@ export const Playground = () => {
   const rateLimit = useQuery(api.playground.getValue, { config });
   const consumeTokens = useMutation(api.playground.consumeRateLimit);
   const resetRateLimit = useMutation(api.playground.resetRateLimit);
+  const getServerTime = useMutation(api.playground.getServerTime);
+  const [serverOffset, setServerOffset] = useState(0);
+
+  useEffect(() => {
+    getServerTime().then((time) => {
+      setServerOffset(time - Date.now());
+    });
+  }, [getServerTime]);
 
   // Timeline visualization logic with proper DPI scaling
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -59,15 +67,17 @@ export const Playground = () => {
 
     const updateTimeline = () => {
       const now = Date.now();
-      // Calculate current value using the rate limit calculation
+      const serverNow = now + serverOffset; // Convert to server time
+
+      // Calculate current value using server time for rate limit calculation
       const currentState = { value: rateLimit.value, ts: rateLimit.ts };
       const calculated = calculateRateLimit(
         currentState,
         rateLimit.config,
-        now,
+        serverNow, // Use server time here
         0
       );
-      const newPoint = { timestamp: now, value: calculated.value };
+      const newPoint = { timestamp: now, value: calculated.value }; // Keep client time for UI
 
       setTimelineData((prev) => {
         const filtered = prev.filter((point) => now - point.timestamp < 10000); // Keep last 10 seconds
@@ -84,7 +94,7 @@ export const Playground = () => {
     return () => {
       clearInterval(interval);
     };
-  }, [rateLimit]);
+  }, [rateLimit, serverOffset]); // Add serverOffset to dependencies
 
   // Setup canvas with proper DPI scaling (only when size changes)
   const setupCanvas = useCallback(() => {
@@ -309,7 +319,7 @@ export const Playground = () => {
       ctx.fillText(labelText, labelX + labelWidth / 2, labelY - 6);
     }
 
-    // Draw consumption bars with improved styling
+    // Draw consumption dots at bottom of graph
     const recentEvents = consumptionHistory.filter(
       (event) => now - event.timestamp < 10000
     );
@@ -317,42 +327,27 @@ export const Playground = () => {
     recentEvents.forEach((event) => {
       const x =
         padding + ((event.timestamp - tenSecondsAgo) / 10000) * plotWidth;
-      const barHeight = (event.count / (capacity + 2)) * plotHeight;
 
-      // Use the captured value at the time of consumption
-      const valueAtTime = event.valueAtConsumption;
+      // Position dot at the bottom of the graph
+      const dotY = height - padding - 5; // 5px above the X-axis
+      const dotRadius = 4;
 
-      // Top of the bar should be at the captured value line
-      const topY =
-        height - padding - (valueAtTime / (capacity + 2)) * plotHeight;
+      // Draw dot with appropriate color
+      ctx.beginPath();
+      ctx.arc(x, dotY, dotRadius, 0, 2 * Math.PI);
 
-      // Bar with gradient and shadow
-      const barGradient = ctx.createLinearGradient(
-        0,
-        topY,
-        0,
-        topY + barHeight
-      );
       if (event.success) {
-        barGradient.addColorStop(0, "#10b981");
-        barGradient.addColorStop(1, "#059669");
+        ctx.fillStyle = "#10b981"; // Green for success
       } else {
-        barGradient.addColorStop(0, "#ef4444");
-        barGradient.addColorStop(1, "#dc2626");
+        ctx.fillStyle = "#ef4444"; // Red for failure
       }
 
-      ctx.fillStyle = barGradient;
-      ctx.shadowColor = event.success
-        ? "rgba(16, 185, 129, 0.3)"
-        : "rgba(239, 68, 68, 0.3)";
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetY = 2;
+      ctx.fill();
 
-      ctx.fillRect(x - 4, topY, 8, barHeight);
-
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
+      // Add a subtle border
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.stroke();
     });
 
     // Draw axis labels with modern typography
@@ -420,11 +415,8 @@ export const Playground = () => {
   // Helper functions
   const handleConsume = useCallback(
     async (count: number) => {
-      // Capture the current value at the time of consumption
-      const currentValue =
-        timelineData.length > 0
-          ? Math.max(0, timelineData[timelineData.length - 1].value)
-          : 0;
+      // Capture the current value right before consumption from the rate limiter state
+      const valueBeforeConsumption = rateLimit ? rateLimit.value : 0;
 
       try {
         const result = await consumeTokens({
@@ -437,7 +429,7 @@ export const Playground = () => {
           timestamp: Date.now(),
           count,
           success: result.ok,
-          valueAtConsumption: currentValue,
+          valueAtConsumption: valueBeforeConsumption,
         };
 
         setConsumptionHistory((prev) => [...prev, event]);
@@ -447,12 +439,12 @@ export const Playground = () => {
           timestamp: Date.now(),
           count,
           success: false,
-          valueAtConsumption: currentValue,
+          valueAtConsumption: valueBeforeConsumption,
         };
         setConsumptionHistory((prev) => [...prev, event]);
       }
     },
-    [consumeTokens, config, timelineData]
+    [consumeTokens, config, rateLimit]
   );
 
   const handleReset = useCallback(async () => {
@@ -614,13 +606,13 @@ export const Playground = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-4 bg-gradient-to-b from-success-500 to-success-600 rounded-sm"></div>
+                <div className="w-3 h-3 bg-success-500 rounded-full border border-white"></div>
                 <span className="text-gray-700 font-medium">
                   Successful consumption
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-4 bg-gradient-to-b from-error-500 to-error-600 rounded-sm"></div>
+                <div className="w-3 h-3 bg-error-500 rounded-full border border-white"></div>
                 <span className="text-gray-700 font-medium">
                   Failed consumption
                 </span>
