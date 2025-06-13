@@ -288,7 +288,7 @@ export const Playground = () => {
         (Math.max(0, lastPoint.value) / (capacity + 2)) * plotHeight;
 
       // Value label with modern styling (positioned to the right of the graph)
-      const labelText = Math.round(lastPoint.value).toString();
+      const labelText = lastPoint.value.toFixed(1);
       const labelMetrics = ctx.measureText(labelText);
       const labelWidth = labelMetrics.width + 16;
       const labelHeight = 24;
