@@ -100,12 +100,9 @@ export declare const components: {
                 shards?: number;
                 start?: number;
               };
-          count?: number;
           key?: string;
           name: string;
-          reserve?: boolean;
           sampleShards?: number;
-          throws?: boolean;
         },
         {
           config: {
@@ -117,7 +114,7 @@ export declare const components: {
             shards: number;
             start?: number;
           };
-          ts: number;
+          ts?: number;
           value: number;
           windowStart?: number;
         }

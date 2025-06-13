@@ -24,7 +24,7 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   demoLimit: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
 });
 
-export const getRateLimit = rateLimiter.getValueQuery("demoLimit");
+export const { getRateLimit, getServerTime } = rateLimiter.hookAPI("demoLimit");
 
 export const consumeTokens = mutation({
   args: {
@@ -34,13 +34,6 @@ export const consumeTokens = mutation({
     return rateLimiter.limit(ctx, "demoLimit", {
       count: args.count || 1,
     });
-  },
-});
-
-export const getServerTime = mutation({
-  args: {},
-  handler: async () => {
-    return Date.now();
   },
 });
 

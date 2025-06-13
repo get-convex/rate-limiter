@@ -4,6 +4,7 @@ import {
   GenericDataModel,
   GenericMutationCtx,
   GenericQueryCtx,
+  mutationGeneric,
   queryGeneric,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
@@ -94,8 +95,8 @@ export class RateLimiter<
     ctx: RunQueryCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>?]
-      : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
   ): Promise<RateLimitReturns> {
     return ctx.runQuery(this.component.lib.checkRateLimit, {
       ...options[0],
@@ -129,8 +130,8 @@ export class RateLimiter<
     ctx: RunMutationCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>?]
-      : [RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
   ): Promise<RateLimitReturns> {
     return ctx.runMutation(this.component.lib.rateLimit, {
       ...options[0],
@@ -175,14 +176,24 @@ export class RateLimiter<
     name: Name,
     ...options: Name extends keyof Limits & string
       ? [
-          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          })?,
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            {
+              key?: string;
+              sampleShards?: number;
+            }
+          >?,
         ]
       : [
-          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          },
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            {
+              key?: string;
+              sampleShards?: number;
+            }
+          >,
         ]
   ) {
     return ctx.runQuery(this.component.lib.getValue, {
@@ -209,27 +220,35 @@ export class RateLimiter<
    * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
    * ```
    */
-  getValueQuery<Name extends string = keyof Limits & string>(
+  hookAPI<Name extends string = keyof Limits & string>(
     name: Name,
-    ...options: Name extends keyof Limits & string
+    ...options: Name extends keyof Limits
       ? [
-          (RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          })?,
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            {
+              key?: string;
+              sampleShards?: number;
+            }
+          >?,
         ]
       : [
-          RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> & {
-            sampleShards?: number;
-          },
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            {
+              key?: string;
+              sampleShards?: number;
+            }
+          >,
         ]
   ) {
     return {
       getRateLimit: queryGeneric({
         args: {
-          count: v.optional(v.number()),
           key: v.optional(v.string()),
           sampleShards: v.optional(v.number()),
-          reserve: v.optional(v.boolean()),
         },
         returns: v.object({
           config: v.object({
@@ -254,13 +273,20 @@ export class RateLimiter<
           });
         },
       }),
+      getServerTime: mutationGeneric({
+        args: {},
+        returns: v.number(),
+        handler: async () => {
+          return Date.now();
+        },
+      }),
     };
   }
 
-  private getConfig<Name extends string>(
-    args: RateLimitArgsWithKnownNameOrInlinedConfig<Limits, Name> | undefined,
+  private getConfig<Name extends string, Args>(
+    args: WithKnownNameOrInlinedConfig<Limits, Name, Args> | undefined,
     name: Name
-  ) {
+  ): RateLimitConfig {
     const config =
       (args && "config" in args && args.config) ||
       (this.limits && this.limits[name]);
@@ -284,11 +310,12 @@ type RunQueryCtx = {
 type RunMutationCtx = {
   runMutation: GenericMutationCtx<GenericDataModel>["runMutation"];
 };
-type RateLimitArgsWithKnownNameOrInlinedConfig<
+type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
   Name extends string,
+  Args,
 > = Expand<
-  Omit<RateLimitArgs, "name" | "config"> &
+  Omit<Args, "name" | "config"> &
     (Name extends keyof Limits
       ? object
       : {
