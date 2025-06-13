@@ -260,7 +260,8 @@ export class RateLimiter<
             shards: v.number(),
             start: v.optional(v.number()),
           }),
-          ts: v.number(),
+          // undefined if there's no usage yet (in the sampled shards)
+          ts: v.optional(v.number()),
           value: v.number(),
           windowStart: v.optional(v.number()),
         }),

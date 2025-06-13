@@ -2,8 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import {
   type RateLimitConfig,
+  calculateRateLimit,
+  fixedWindowValidator,
   rateLimitArgs,
   rateLimitReturns,
+  tokenBucketValidator,
 } from "../shared.js";
 import {
   checkRateLimitOrThrow,
@@ -41,12 +44,15 @@ export const checkRateLimit = query({
 
 export const getValue = query({
   args: {
-    ...rateLimitArgs,
+    name: v.string(),
+    key: v.optional(v.string()),
+    config: v.union(tokenBucketValidator, fixedWindowValidator),
     sampleShards: v.optional(v.number()),
   },
   returns: v.object({
     value: v.number(),
-    ts: v.number(),
+    // undefined if there's no usage yet (in the sampled shards)
+    ts: v.optional(v.number()),
     windowStart: v.optional(v.number()),
     config: v.object({
       kind: v.union(v.literal("token bucket"), v.literal("fixed window")),
@@ -72,37 +78,40 @@ export const getValue = query({
       shardIndices.splice(randomIndex, 1);
     }
 
-    const firstShard = await getShard(
-      ctx.db,
-      args.name,
-      args.key,
-      selectedShards[0] || 0
-    );
+    // TODO: account for all the shards!?
+    const allShards = (
+      await Promise.all(
+        selectedShards.map((shard) =>
+          getShard(ctx.db, args.name, args.key, shard)
+        )
+      )
+    ).filter((shard) => shard !== null);
 
-    if (firstShard) {
+    if (allShards.length === 0) {
       const windowStart =
-        config.kind === "fixed window" ? firstShard.ts : undefined;
+        config.kind === "fixed window" ? config.start : undefined;
 
       return {
-        value: firstShard.value,
-        ts: firstShard.ts,
+        value: config.capacity,
+        ts: undefined,
         windowStart,
         config,
       };
     }
 
-    const max = config.capacity;
+    const maxTs = Math.max(...allShards.map((shard) => shard.ts));
+    // we calculate the values as if each shard was at the latest ts
+    // we avoid passing Date.now() so the query isn't too time-aware.
+    const values = allShards.map(
+      (shard) => calculateRateLimit(shard, config, maxTs, 0).value
+    );
+    const avgValue = values.reduce((a, b) => a + b, 0) / values.length;
     const windowStart =
-      config.kind === "fixed window"
-        ? config.start ?? Math.floor(Math.random() * config.period)
-        : undefined;
+      config.kind === "fixed window" ? config.start : undefined;
 
     return {
-      value: max,
-      ts:
-        args.config.kind === "fixed window"
-          ? (windowStart as number)
-          : Date.now(),
+      value: avgValue,
+      ts: maxTs,
       windowStart,
       config,
     };
