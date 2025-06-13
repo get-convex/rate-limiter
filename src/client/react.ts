@@ -74,7 +74,7 @@ export function useRateLimit(
   });
 
   // Takes in and exposes client time
-  const checkValue = useCallback(
+  const check = useCallback(
     (ts?: number, count?: number) => {
       if (!rateLimitData) return undefined;
 
@@ -100,7 +100,7 @@ export function useRateLimit(
     [rateLimitData]
   );
 
-  const currentValue = checkValue(Date.now(), count ?? 1);
+  const currentValue = check(Date.now(), count ?? 1);
   const status =
     currentValue &&
     (currentValue.value < 0
@@ -115,7 +115,7 @@ export function useRateLimit(
 
   return {
     status,
-    checkValue,
+    check,
   };
 }
 

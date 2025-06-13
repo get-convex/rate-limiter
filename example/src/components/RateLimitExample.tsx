@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useRateLimit } from '../../../src/client/react';
-import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { useState, useCallback, useEffect } from "react";
+import { useRateLimit } from "../../../src/client/react";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 export const RateLimitExample = () => {
   const [count, setCount] = useState(1);
@@ -9,12 +9,19 @@ export const RateLimitExample = () => {
   const [error, setError] = useState<Error | null>(null);
 
   const consumeTokensMutation = useMutation(api.example.consumeTokens);
-  const { status, checkValue } = useRateLimit(api.example.getRateLimit, {
+  const { status, check: checkValue } = useRateLimit(api.example.getRateLimit, {
     // Optional, but increases the accuracy of the retry suggestion based on
     // clock skew between client and server
     getServerTimeMutation: api.example.getServerTime,
     count: count,
   });
+  const [value, setValue] = useState<number | null>(null);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setValue(checkValue(Date.now())?.value ?? null);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [checkValue]);
 
   const handleConsume = useCallback(() => {
     consumeTokensMutation({ count })
@@ -37,10 +44,10 @@ export const RateLimitExample = () => {
 
       <div className="status-panel">
         <h3>Current Status</h3>
-        <p>Available tokens: {checkValue()?.value ?? "Loading..."}</p>
+        <p>Available tokens: {value ?? "Loading..."}</p>
         <p>Status: {status?.ok ? "✅ OK" : "❌ Rate limited"}</p>
         {!status?.ok && status?.retryAt && (
-          <p>Retry after: {formatTime(status.retryAt)}</p>
+          <p>Retry at: {formatTime(status.retryAt)}</p>
         )}
         <p>Consumed tokens: {consumedTokens}</p>
         {error && <p className="error">Error: {error.message}</p>}
@@ -68,7 +75,7 @@ export const RateLimitExample = () => {
         <div className="retry-info">
           <p>
             Time to retry for {count} tokens:{" "}
-            {formatTime(checkValue(Date.now(), count)?.retryAt ?? null)}
+            {formatTime(status?.retryAt ?? null)}
           </p>
         </div>
       </div>
@@ -88,11 +95,9 @@ export const RateLimitExample = () => {
             <strong>status.retryAt</strong>: When to retry if rate limited
           </li>
           <li>
-            <strong>getValue()</strong>: Current available token count
-          </li>
-          <li>
-            <strong>retryAt(count)</strong>: Calculate when you can retry for a
-            specific token count
+            <strong>check(ts?, count?)</strong>: Checks the rate limiter at a
+            given timestamp and for a given count, including the current value,
+            ts it was based on, and when to retry
           </li>
         </ul>
         <p>

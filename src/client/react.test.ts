@@ -49,7 +49,7 @@ describe("useRateLimit", () => {
 
     expect(result.current.status?.ok).toBe(true);
     expect(result.current.status?.retryAt).toBeUndefined();
-    expect(result.current.checkValue()?.value).toBeCloseTo(8, 1);
+    expect(result.current.check()?.value).toBeCloseTo(8, 1);
   });
 
   test("returns correct status when rate limit is exceeded", () => {
@@ -72,7 +72,7 @@ describe("useRateLimit", () => {
 
     expect(result.current.status?.ok).toBe(false);
     expect(result.current.status?.retryAt).toBeDefined();
-    expect(result.current.checkValue()?.value).toBeCloseTo(0, 1);
+    expect(result.current.check()?.value).toBeCloseTo(0, 1);
   });
 
   test("handles clock skew correctly", () => {
@@ -101,7 +101,7 @@ describe("useRateLimit", () => {
 
     expect(result.current.status?.ok).toBe(true);
 
-    const checkResult = result.current.checkValue(undefined, 6);
+    const checkResult = result.current.check(undefined, 6);
     expect(checkResult?.retryAt).toBeDefined();
 
     const expectedRetryTime = serverTime + (6 - 5) / (10 / 60000);
@@ -133,7 +133,7 @@ describe("useRateLimit", () => {
 
     // For fixed window, when there are tokens available, retryAt should still be defined
     // because it indicates when the next window starts
-    const checkResult = result.current.checkValue(undefined, 12); // Request more than available
+    const checkResult = result.current.check(undefined, 12); // Request more than available
     expect(checkResult?.retryAt).toBeDefined();
 
     const expectedRetryTime = windowStart + 60000;
