@@ -66,6 +66,7 @@ export const rateLimitArgs = {
   reserve: v.optional(v.boolean()),
   throws: v.optional(v.boolean()),
   config: v.union(tokenBucketValidator, fixedWindowValidator),
+  // TODO: allow specifying the shard to use here
 };
 
 export type RateLimitArgs = {
@@ -93,6 +94,7 @@ export const rateLimitReturns = v.union(
   }),
   v.object({
     ok: v.literal(false),
+    // TODO: include the shard here they should retry with
     retryAfter: v.number(),
   })
 );
