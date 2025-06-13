@@ -9,7 +9,7 @@ export const RateLimitExample = () => {
   const [error, setError] = useState<Error | null>(null);
 
   const consumeTokensMutation = useMutation(api.example.consumeTokens);
-  const { status, check: checkValue } = useRateLimit(api.example.getRateLimit, {
+  const { status, check } = useRateLimit(api.example.getRateLimit, {
     // Optional, but increases the accuracy of the retry suggestion based on
     // clock skew between client and server
     getServerTimeMutation: api.example.getServerTime,
@@ -18,10 +18,10 @@ export const RateLimitExample = () => {
   const [value, setValue] = useState<number | null>(null);
   useEffect(() => {
     const interval = setInterval(() => {
-      setValue(checkValue(Date.now())?.value ?? null);
+      setValue(check(Date.now())?.value ?? null);
     }, 1000);
     return () => clearInterval(interval);
-  }, [checkValue]);
+  }, [check]);
 
   const handleConsume = useCallback(() => {
     consumeTokensMutation({ count })
