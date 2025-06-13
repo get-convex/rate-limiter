@@ -64,7 +64,7 @@ export function useRateLimit(
         const latency = Date.now() - clientTime;
         setTimeOffset(serverTime - clientTime - latency / 2);
       });
-  }, [convex, getServerTimeMutation]);
+  }, [convex, !!getServerTimeMutation]);
 
   // Based on server time
   const rateLimitData = useQuery(getRateLimitValueQuery, {
