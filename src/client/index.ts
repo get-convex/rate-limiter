@@ -1,9 +1,9 @@
 import {
-  Expand,
-  FunctionReference,
-  GenericDataModel,
-  GenericMutationCtx,
-  GenericQueryCtx,
+  type Expand,
+  type FunctionReference,
+  type GenericDataModel,
+  type GenericMutationCtx,
+  type GenericQueryCtx,
   mutationGeneric,
   queryGeneric,
 } from "convex/server";

@@ -1,12 +1,13 @@
 import { ConvexError } from "convex/values";
 import {
-  RateLimitArgs,
-  RateLimitConfig,
-  RateLimitError,
-  RateLimitReturns,
+  calculateRateLimit,
+  type RateLimitArgs,
+  type RateLimitConfig,
+  type RateLimitError,
+  type RateLimitReturns,
 } from "../shared.js";
-import { Doc } from "./_generated/dataModel.js";
-import { DatabaseReader } from "./_generated/server.js";
+import type { Doc } from "./_generated/dataModel.js";
+import type { DatabaseReader } from "./_generated/server.js";
 
 // If there are only two shards, it's not really worth checking them both
 // since it'd introduce a read dependency on all shards anyways.

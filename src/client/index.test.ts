@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { ConvexError } from "convex/values";
-import { isRateLimitError, RateLimitError } from "./index.js";
+import { isRateLimitError, type RateLimitError } from "./index.js";
 test("isRateLimitError", () => {
   expect(
     isRateLimitError(

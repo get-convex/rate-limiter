@@ -1,12 +1,19 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import {
+  afterEach,
+  assert,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest";
 import schema from "./schema.js";
 import { modules } from "./setup.test.js";
-import { getValue } from "./lib.js";
 import { api } from "./_generated/api.js";
+import type { RateLimitConfig } from "../shared.js";
 
 const Second = 1_000;
-const Minute = 60 * Second;
 
 describe.each(["token bucket", "fixed window"] as const)(
   "getValue %s",

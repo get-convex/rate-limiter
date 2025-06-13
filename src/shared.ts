@@ -1,4 +1,5 @@
-import { Infer, v } from "convex/values";
+import type { Infer } from "convex/values";
+import { v } from "convex/values";
 
 /**
  * A token bucket limits the rate of requests by continuously adding tokens to

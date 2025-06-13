@@ -8,6 +8,7 @@
     "lib": ["ES2021", "dom"],
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "skipLibCheck": true,

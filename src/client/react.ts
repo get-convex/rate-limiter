@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { useQuery, useConvex } from "convex/react";
-import { FunctionReference } from "convex/server";
-import { calculateRateLimit, GetValueReturns } from "../shared";
+import type { FunctionReference } from "convex/server";
+import { calculateRateLimit, type GetValueReturns } from "../shared";
 
 type UseRateLimitArgs = {
   name?: string;
