@@ -17,6 +17,7 @@ import type {
   GetValueReturns,
 } from "../shared.js";
 import { getValueArgs, getValueReturns } from "../shared.js";
+export { calculateRateLimit } from "../shared.js";
 export type {
   RateLimitArgs,
   RateLimitConfig,
@@ -197,7 +198,7 @@ export class RateLimiter<
             }
           >,
         ]
-  ) {
+  ): Promise<GetValueReturns> {
     return ctx.runQuery(this.component.lib.getValue, {
       ...options[0],
       name,

@@ -6,7 +6,7 @@
 
 This component provides application-level rate limiting.
 
-Example:
+Teaser:
 
 ```ts
 const rateLimiter = new RateLimiter(components.rateLimiter, {
@@ -19,7 +19,11 @@ const status = await rateLimiter.limit(ctx, "freeTrialSignUp");
 
 // Limit how fast a user can send messages
 const status = await rateLimiter.limit(ctx, "sendMessage", { key: userId });
+
+// Use the React hook to check the rate limit
+const { status, check } = useRateLimit(api.example.getRateLimit, { count });
 ```
+See below for more details on usage.
 
 **What is rate limiting?**
 
@@ -181,6 +185,49 @@ await rateLimiter.reset(ctx, "failedLogins", { key: userId });
 // Use a one-off rate limit config (when not named on initialization)
 const config = { kind: "fixed window", rate: 1, period: SECOND };
 const status = await rateLimiter.limit(ctx, "oneOffName", { config });
+```
+
+### Using the React hook
+
+You can use the React hook to check the rate limit in your browser code.
+
+First, define the server API to get the rate limit value:
+
+```ts
+// In convex/example.ts
+export const { getRateLimit, getServerTime } = rateLimiter.hookAPI("sendMessage");
+```
+
+Then, use the React hook to check the rate limit:
+
+```ts
+function App() {
+  const { status: { ok, retryAt }, check } = useRateLimit(api.example.getRateLimit, {
+    // All of these are optional
+    count: 1, // The number of tokens to wait on
+    getServerTimeMutation: getServerTime, // Allows the hook to align the browser and server clocks
+    key: userId, // The key to check for the rate limit, if you use one
+  });
+
+  // If you want to check at specific times and get the concrete value:
+  const { value, ts, config, ok, retryAt } = check(Date.now(), count);
+```
+
+### Fetching the current value directly
+
+You can fetch the current value of a rate limit directly, if you want to know
+the concrete value and timestamp it was last updated.
+
+```ts
+const { config, value, ts } = await rateLimiter.getValue(ctx, "sendMessage", { key: userId });
+```
+
+And you can use `calculateRateLimit` to calculate the value at a given timestamp:
+
+```ts
+import { calculateRateLimit } from "@convex-dev/rate-limiter";
+
+const { config, value, ts } = calculateRateLimit({ value, ts }, config, Date.now(), count || 0);
 ```
 
 ### Scaling rate limiting with shards
