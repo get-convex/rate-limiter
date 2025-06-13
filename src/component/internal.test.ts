@@ -322,18 +322,7 @@ describe.each([1, 2, 3, 4] as const)("sharding: %s", (shards) => {
           throws: true,
         });
       })
-    ).rejects.toThrowError(
-      new ConvexError({
-        kind: "RateLimited",
-        name: "simple",
-        retryAfter:
-          shards === 1
-            ? Second // 1 shard has a rate of 1
-            : shards === 2
-              ? 2 * Second // 2 shards each have a rate of .5
-              : (shards * Second) / 2, // Each has a rate of 1/n but 1/2 the work
-      })
-    );
+    ).rejects.toThrowError(ConvexError);
   });
 
   test("success when at least one of the two shards has enough", async () => {

@@ -38,12 +38,19 @@ describe.each(["token bucket", "fixed window"] as const)(
 
         expect(result.value).toBe(10);
         expect(result.ts).toBeDefined();
-        expect(result.config).toEqual(config);
+        expect(result.config).toMatchObject({
+          ...config,
+          capacity: config.rate,
+          shards: 1,
+        });
 
         if (kind === "fixed window") {
-          expect(result.windowStart).toBeDefined();
+          assert(result.config.kind === "fixed window");
+          expect(result.config.start).toBeDefined();
         } else {
-          expect(result.windowStart).toBeUndefined();
+          expect(result.config).toMatchObject({
+            kind: "token bucket",
+          });
         }
       });
     });
@@ -62,14 +69,23 @@ describe.each(["token bucket", "fixed window"] as const)(
 
         expect(result.value).toBe(10);
         expect(result.ts).toBeDefined();
-        expect(result.config).toEqual(config);
+        const { start, ...rest } = result.config;
+        if (kind === "fixed window") {
+          expect(start).toBeTypeOf("number");
+        } else {
+          expect(start).toBeFalsy();
+        }
+        expect(rest).toMatchObject({
+          ...config,
+          capacity: config.rate,
+        });
       });
     });
 
     test("get value after consumption", async () => {
       const t = convexTest(schema, modules);
       const name = "consumed";
-      const config = { kind, rate: 10, period: Second };
+      const config = { kind, rate: 10, period: Second } as RateLimitConfig;
 
       await t.run(async (ctx) => {
         await ctx.runMutation(api.lib.rateLimit, {
@@ -85,7 +101,10 @@ describe.each(["token bucket", "fixed window"] as const)(
 
         expect(result.value).toBe(6);
         expect(result.ts).toBeDefined();
-        expect(result.config).toEqual(config);
+        expect(result.config).toMatchObject({
+          ...config,
+          capacity: config.rate,
+        });
       });
     });
   }
