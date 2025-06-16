@@ -223,29 +223,14 @@ export class RateLimiter<
    * const { status, getValue, retryAt } = useRateLimit(api.getRateLimit, 10);
    * ```
    */
-  hookAPI<Name extends string = keyof Limits & string>(
+  hookAPI<
+    DataModel extends GenericDataModel,
+    Name extends string = keyof Limits & string,
+  >(
     name: Name,
     ...options: Name extends keyof Limits
-      ? [
-          WithKnownNameOrInlinedConfig<
-            Limits,
-            Name,
-            {
-              key?: string;
-              sampleShards?: number;
-            }
-          >?,
-        ]
-      : [
-          WithKnownNameOrInlinedConfig<
-            Limits,
-            Name,
-            {
-              key?: string;
-              sampleShards?: number;
-            }
-          >,
-        ]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, HookOpts<DataModel>>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, HookOpts<DataModel>>]
   ) {
     return {
       getRateLimit: queryGeneric({
@@ -253,9 +238,20 @@ export class RateLimiter<
         returns: getValueReturns,
         handler: async (ctx, args): Promise<GetValueReturns> => {
           const finalName = args.name ?? name;
+          let key = args.key;
+          const { key: keyOrFn, ...rest } = options[0] ?? {};
+          if (key && keyOrFn) {
+            throw new Error("Cannot provide key in client args and hookAPI");
+          }
+          if (typeof keyOrFn === "function") {
+            key = await keyOrFn(ctx);
+          } else {
+            key = keyOrFn;
+          }
           return ctx.runQuery(this.component.lib.getValue, {
-            ...options[0],
+            ...rest,
             ...args,
+            key,
             name: finalName,
             config: this.getConfig(options[0], finalName),
           });
@@ -327,3 +323,10 @@ type UseApi<API> = Expand<{
     : UseApi<API[K]>;
 }>;
 type RateLimiterApi = UseApi<Mounts>;
+
+type HookOpts<DataModel extends GenericDataModel> = {
+  key?:
+    | string
+    | ((ctx: GenericQueryCtx<DataModel>) => string | Promise<string>);
+  sampleShards?: number;
+};

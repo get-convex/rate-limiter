@@ -19,7 +19,15 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   demoLimit: { kind: "token bucket", rate: 10, period: MINUTE, capacity: 10 },
 });
 
-export const { getRateLimit, getServerTime } = rateLimiter.hookAPI("demoLimit");
+export const { getRateLimit, getServerTime } = rateLimiter.hookAPI(
+  "demoLimit",
+  {
+    key: async (ctx) => {
+      const user = await ctx.auth.getUserIdentity();
+      return user?.subject ?? "anonymous";
+    },
+  }
+);
 
 export const consumeTokens = mutation({
   args: {
