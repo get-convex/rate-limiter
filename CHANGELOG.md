@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.8 alpha
+## 0.2.8
 
 - Add `useRateLimit` hook in `@convex-dev/rate-limiter/react` along with a helper
   to define an API for the hook to watch a rate limit value from the client.
