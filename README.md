@@ -273,7 +273,16 @@ and period proportionally to get enough shards and capacity per shard:
 ### Reserving capacity:
 
 You can also allow it to `reserve` capacity to avoid starvation on larger
-requests. Details in the [Stack post](https://stack.convex.dev/rate-limiting).
+requests.
+
+When you reserve capacity ahead of time, the contract is that you can run your
+operation at the specified time (via the `retryAfter` field), at which point
+you don't have to re-check the rate limit. Your capacity has been "ear-marked".
+
+With this, you can queue up many operations and they will be run at spaced-out
+intervals, maximizing the utilization of the rate limit.
+
+Details in the [Stack post](https://stack.convex.dev/rate-limiting).
 
 ```ts
 const myAction = internalAction({
@@ -286,7 +295,6 @@ const myAction = internalAction({
       // Reserve future capacity instead of just failing now
       const status = await rateLimiter.limit(ctx, "llmRequests", {
         reserve: true,
-        throws: true,
       });
       if (status.retryAfter) {
         return ctx.scheduler.runAfter(

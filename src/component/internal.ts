@@ -18,11 +18,11 @@ export async function checkRateLimitOrThrow(
   args: RateLimitArgs
 ) {
   const result = await checkRateLimitSharded(db, args);
-  if (!result.status.ok && args.throws) {
+  if (result.status.retryAfter && args.throws) {
     throw new ConvexError({
       kind: "RateLimited",
       name: args.name,
-      retryAfter: result.status.retryAfter!,
+      retryAfter: result.status.retryAfter,
     } satisfies RateLimitError);
   }
   return result;
