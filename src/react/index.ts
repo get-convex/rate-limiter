@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useQuery, useConvex } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import {
@@ -101,22 +101,24 @@ export function useRateLimit(
   );
 
   const currentValue = check(Date.now(), count ?? 1);
-  const status =
-    currentValue &&
-    (currentValue.value < 0
-      ? { ok: false as const, retryAt: currentValue.retryAt! }
-      : { ok: true as const, retryAt: undefined });
+  const ret = useMemo(() => {
+    if (!currentValue) return { status: undefined, check };
+    if (currentValue.value < 0) {
+      return {
+        status: { ok: false as const, retryAt: currentValue.retryAt! },
+        check,
+      };
+    }
+    return { status: { ok: true as const, retryAt: undefined }, check };
+  }, [currentValue]);
 
   useEffect(() => {
-    if (status?.ok !== false) return;
-    const interval = setTimeout(refresh, status.retryAt - Date.now());
+    if (ret?.status?.ok !== false) return;
+    const interval = setTimeout(refresh, ret.status.retryAt - Date.now());
     return () => clearTimeout(interval);
-  }, [status?.ok, status?.retryAt, refresh]);
+  }, [ret?.status?.ok, ret?.status?.retryAt, refresh]);
 
-  return {
-    status,
-    check,
-  };
+  return ret;
 }
 
 function useForceUpdate() {

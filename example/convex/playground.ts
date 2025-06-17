@@ -1,9 +1,8 @@
-import { tokenBucketValidator } from "../../src/shared";
+import { RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { fixedWindowValidator } from "../../src/shared";
+import { fixedWindowValidator, tokenBucketValidator } from "../../src/shared";
 import { components } from "./_generated/api";
-import { RateLimiter } from "../../src/client";
+import { mutation, query } from "./_generated/server";
 
 const rateLimiter = new RateLimiter(components.rateLimiter);
 

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { calculateRateLimit } from "../../../src/shared";
+import { calculateRateLimit } from "@convex-dev/rate-limiter";
 
 interface ConsumptionEvent {
   timestamp: number;
