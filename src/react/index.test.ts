@@ -2,15 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import {
-  describe,
-  expect,
-  test,
-  vi,
-  beforeEach,
-  afterEach,
-  assert,
-} from "vitest";
+import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 import { useRateLimit, type GetRateLimitValueQuery } from "./index.js";
 import { renderHook, act } from "@testing-library/react";
 import { useQuery, useConvex } from "convex/react";
