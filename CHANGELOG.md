@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- The return value of the hook is now stable to use as deps, and always returns { status, check }
+
 ## 0.2.8
 
 - Add `useRateLimit` hook in `@convex-dev/rate-limiter/react` along with a helper
