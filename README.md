@@ -195,7 +195,11 @@ First, define the server API to get the rate limit value:
 
 ```ts
 // In convex/example.ts
-export const { getRateLimit, getServerTime } = rateLimiter.hookAPI("sendMessage");
+export const { getRateLimit, getServerTime } = rateLimiter.hookAPI(
+  "sendMessage",
+  // Optionally provide a key function to get the key for the rate limit
+  { key: async (ctx) => getUserId(ctx) }
+);
 ```
 
 Then, use the React hook to check the rate limit:
@@ -203,10 +207,10 @@ Then, use the React hook to check the rate limit:
 ```ts
 function App() {
   const { status: { ok, retryAt }, check } = useRateLimit(api.example.getRateLimit, {
-    // All of these are optional
-    count: 1, // The number of tokens to wait on
-    getServerTimeMutation: getServerTime, // Allows the hook to align the browser and server clocks
-    key: userId, // The key to check for the rate limit, if you use one
+    // [recommended] Allows the hook to sync the browser and server clocks
+    getServerTimeMutation: getServerTime,
+    // [optional] The number of tokens to wait on
+    count: 1,
   });
 
   // If you want to check at specific times and get the concrete value:
@@ -243,7 +247,7 @@ still best to avoid them.
 
 Not to worry! To provide high throughput, we can use a technique called "sharding"
 where we break up the total capacity into individual buckets, or "shards".
-When we go to use some of that capacity, we check a random shard[^1].
+When we go to use some of that capacity, we check a random shard.<sup>[1](#power-of-two)</sup>
 While sometimes we'll get unlucky and get rate limited when there was capacity
 elsewhere, we'll never voilate the rate limit's upper bound.
 
@@ -268,7 +272,11 @@ and period proportionally to get enough shards and capacity per shard:
 `{ shards: 50, rate: 250, period: 2.5 * SECOND }` or even better:
 `{ shards: 50, rate: 1000, period: 10 * SECOND }`.
 
-[^1]: We're actually going one step further and checking two shards and using the one with more capacity, to keep them relatively balanced, based on the [power of two technique](https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf). We will also combine the capacity of the two shards if neither has enough on their own.
+#### Power of two
+We're actually going one step further and checking two shards and using the one
+with more capacity, to keep them relatively balanced, based on the
+[power of two technique](https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf).
+We will also combine the capacity of the two shards if neither has enough on their own.
 
 ### Reserving capacity:
 
@@ -318,7 +326,7 @@ const myAction = internalAction({
 When too many users show up at once, it can cause network congestion,
 database contention, and consume other shared resources at an unnecessarily high rate.
 Instead we can return a random time within the next period to retry.
-Hopefully this is infrequent. This technique is referred to as adding “jitter.”
+Hopefully this is infrequent. This technique is referred to as adding "jitter."
 
 A simple implementation could look like:
 
@@ -327,7 +335,7 @@ const retryAfter = status.retryAfter + Math.random() * period;
 ```
 
 For the fixed window, we also introduce randomness by picking the start time of the window
-(from which all subsequent windows are based) randomly if config.start wasn’t provided.
+(from which all subsequent windows are based) randomly if config.start wasn't provided.
 This helps from all clients flooding requests at midnight and paging you.
 
 ## More resources
