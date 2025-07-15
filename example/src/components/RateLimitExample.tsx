@@ -8,7 +8,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 
 export const RateLimitExample = () => {
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(4);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -73,90 +73,42 @@ export const RateLimitExample = () => {
         </p>
       </div>
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Token Count Selector */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-gray-700 text-center">
-              Tokens to Consume
-            </p>
-            <div className="flex items-center justify-center">
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={count}
-                onChange={(e) => setCount(parseInt(e.target.value) || 1)}
-                className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-center text-2xl font-bold text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
-              />
-            </div>
-            <div className="text-center">
-              <span className="text-xs text-gray-500">tokens</span>
-            </div>
+      {/* Code Example */}
+      <div className="bg-gray-900 rounded-2xl p-6 text-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">
+            Hook Implementation
+          </h3>
+          <div className="px-3 py-1 bg-gray-700 rounded-lg text-gray-300 text-xs font-mono">
+            useRateLimit
           </div>
         </div>
 
-        {/* Current Status */}
-        <div
-          className={`rounded-2xl p-6 border-2 transition-all duration-300 ${
-            status?.ok
-              ? "bg-success-50 border-success-200"
-              : "bg-error-50 border-error-200"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Status</p>
-              <div className="flex items-center gap-2 mt-1">
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    status?.ok ? "bg-success-500" : "bg-error-500"
-                  }`}
-                ></div>
-                <span
-                  className={`font-bold text-lg ${
-                    status?.ok ? "text-success-900" : "text-error-900"
-                  }`}
-                >
-                  {status?.ok ? "Available" : "Rate Limited"}
-                </span>
-              </div>
-            </div>
-            <div
-              className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                status?.ok ? "bg-success-500" : "bg-error-500"
-              }`}
-            >
-              <span className="text-white text-xl">
-                {status?.ok ? "✓" : "⚠"}
-              </span>
-            </div>
-          </div>
-        </div>
+        <pre className="text-gray-300 overflow-x-auto">
+          <code>{`const { status, check } = useRateLimit(api.example.getRateLimit, {
+  getServerTimeMutation: api.example.getServerTime,
+  count: ${count},
+});
 
-        {/* Available Tokens */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-700">
-                Available Tokens
-              </p>
-              <p className="text-3xl font-bold text-primary-900 mt-1">
-                {value !== null ? value.toFixed(1) : "..."}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center">
-              <div className="w-6 h-6 bg-white rounded-full"></div>
-            </div>
-          </div>
-        </div>
+// Real-time status checking
+useEffect(() => {
+  const interval = setInterval(() => {
+    setValue(check(Date.now())?.value ?? null);
+  }, 100);
+  return () => clearInterval(interval);
+}, [check]);
+
+// status.ok: ${status?.ok ? "true ✅" : "false 🚫"}
+// check(Date.now()): ${value !== null ? value.toFixed(1) : "Loading..."}
+// status.retryAt: ${status?.retryAt ? status.retryAt.toFixed(0) + " (" + formatRetryTime(status.retryAt) + ")" : "undefined"}
+`}</code>
+        </pre>
       </div>
 
       {/* Actions and Retry Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Actions */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
+        <div className="flex gap-4 bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
           <button
             onClick={handleConsume}
             disabled={!status?.ok || isLoading}
@@ -168,8 +120,18 @@ export const RateLimitExample = () => {
           >
             {isLoading
               ? "Consuming..."
-              : `Consume ${count} Token${count > 1 ? "s" : ""}`}
+              : `Consume Token${count > 1 ? "s" : ""}`}
           </button>
+          <div className="flex items-center justify-center">
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={count}
+              onChange={(e) => setCount(parseInt(e.target.value) || 1)}
+              className="w-16 px-3 py-2 border border-gray-300 rounded-lg text-center text-2xl font-bold text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+            />
+          </div>
         </div>
 
         {/* Retry Information */}
@@ -218,45 +180,14 @@ export const RateLimitExample = () => {
         </div>
       )}
 
-      {/* Code Example */}
-      <div className="bg-gray-900 rounded-2xl p-6 text-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">
-            Hook Implementation
-          </h3>
-          <div className="px-3 py-1 bg-gray-700 rounded-lg text-gray-300 text-xs font-mono">
-            useRateLimit
-          </div>
-        </div>
-
-        <pre className="text-gray-300 overflow-x-auto">
-          <code>{`const { status, check } = useRateLimit(api.example.getRateLimit, {
-  getServerTimeMutation: api.example.getServerTime,
-  count: ${count},
-});
-
-// Real-time status checking
-useEffect(() => {
-  const interval = setInterval(() => {
-    setValue(check(Date.now())?.value ?? null);
-  }, 100);
-  return () => clearInterval(interval);
-}, [check]);
-
-// Status: ${status?.ok ? "✅ Available" : "🚫 Rate Limited"}
-// Available tokens: ${value !== null ? value.toFixed(1) : "Loading..."}
-${!status?.ok && status?.retryAt ? `// Retry at: ${formatRetryTime(status.retryAt)}` : ""}`}</code>
-        </pre>
-      </div>
-
       {/* How It Works */}
       <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-200 p-6">
         <h3 className="text-xl font-bold text-gray-800 mb-4">
           How useRateLimit Works
         </h3>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="space-y-4">
+        <div className="grid md:grid-rows-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
             <div className="p-4 bg-white rounded-xl border border-gray-200">
               <h4 className="font-semibold text-primary-700 mb-2">
                 Real-time Status
@@ -278,7 +209,7 @@ ${!status?.ok && status?.retryAt ? `// Retry at: ${formatRetryTime(status.retryA
             </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-6">
             <div className="p-4 bg-white rounded-xl border border-gray-200">
               <h4 className="font-semibold text-yellow-700 mb-2">
                 Clock Synchronization

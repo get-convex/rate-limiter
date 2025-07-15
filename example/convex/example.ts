@@ -34,8 +34,11 @@ export const consumeTokens = mutation({
     count: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const user = await ctx.auth.getUserIdentity();
+    const key = user?.subject ?? "anonymous";
     return rateLimiter.limit(ctx, "demoLimit", {
       count: args.count || 1,
+      key,
     });
   },
 });
