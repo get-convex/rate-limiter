@@ -253,7 +253,7 @@ export class RateLimiter<
             ...args,
             key,
             name: finalName,
-            config: this.getConfig(options[0], finalName),
+            config: args.config ?? this.getConfig(options[0], finalName),
           });
         },
       }),

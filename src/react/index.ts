@@ -5,6 +5,7 @@ import {
   calculateRateLimit,
   type GetValueArgs,
   type GetValueReturns,
+  type RateLimitConfig,
 } from "../shared";
 
 export type UseRateLimitOptions = {
@@ -13,6 +14,7 @@ export type UseRateLimitOptions = {
   count?: number;
   sampleShards?: number;
   getServerTimeMutation?: GetServerTimeMutation;
+  config?: RateLimitConfig;
 };
 
 export type GetRateLimitValueQuery = FunctionReference<
@@ -71,6 +73,7 @@ export function useRateLimit(
     name: args.name,
     key: args.key,
     sampleShards: args.sampleShards,
+    config: args.config,
   });
 
   // Takes in and exposes client time

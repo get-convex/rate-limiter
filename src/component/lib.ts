@@ -5,6 +5,7 @@ import {
   fixedWindowValidator,
   getValueReturns,
   rateLimitArgs,
+  configValidator,
   rateLimitReturns,
   tokenBucketValidator,
 } from "../shared.js";
@@ -46,7 +47,7 @@ export const getValue = query({
   args: {
     name: v.string(),
     key: v.optional(v.string()),
-    config: v.union(tokenBucketValidator, fixedWindowValidator),
+    config: configValidator,
     sampleShards: v.optional(v.number()),
   },
   returns: getValueReturns,

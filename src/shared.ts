@@ -37,6 +37,11 @@ export const fixedWindowValidator = v.object({
   start: v.optional(v.number()),
 });
 
+export const configValidator = v.union(
+  tokenBucketValidator,
+  fixedWindowValidator
+);
+
 /**
  * One of the supported rate limits.
  * See {@link tokenBucketValidator} and {@link fixedWindowValidator} for more
@@ -65,7 +70,7 @@ export const rateLimitArgs = {
   count: v.optional(v.number()),
   reserve: v.optional(v.boolean()),
   throws: v.optional(v.boolean()),
-  config: v.union(tokenBucketValidator, fixedWindowValidator),
+  config: configValidator,
   // TODO: allow specifying the shard to use here
 };
 
@@ -111,6 +116,7 @@ export const getValueArgs = v.object({
   name: v.optional(v.string()),
   key: v.optional(v.string()),
   sampleShards: v.optional(v.number()),
+  config: v.optional(configValidator),
 });
 
 export type GetValueArgs = Infer<typeof getValueArgs>;
@@ -119,7 +125,7 @@ export const getValueReturns = v.object({
   value: v.number(),
   ts: v.number(),
   shard: v.number(),
-  config: v.union(tokenBucketValidator, fixedWindowValidator),
+  config: configValidator,
 });
 
 export type GetValueReturns = Infer<typeof getValueReturns>;
