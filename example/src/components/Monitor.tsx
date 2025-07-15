@@ -1,21 +1,34 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import type {
+  GetRateLimitValueQuery,
+  UseRateLimitOptions,
+} from "@convex-dev/rate-limiter/react";
+import { useRateLimit } from "@convex-dev/rate-limiter/react";
+import { useQuery } from "convex/react";
 
 interface ConsumptionEvent {
   timestamp: number;
-  count: number;
   success: boolean;
 }
 
 interface MonitorProps {
-  getCurrentValue: () => number;
-  consumptionHistory: ConsumptionEvent[];
-  capacity: number;
+  getRateLimitValueQuery: GetRateLimitValueQuery;
+  opts?: UseRateLimitOptions;
+  consumptionHistory?: ConsumptionEvent[];
+  height?: string | number;
+}
+
+function formatNumber(value: number) {
+  if (value < 1000) return value.toFixed(1);
+  if (value < 100000) return (value / 1000).toFixed(1) + "k";
+  return (value / 1000000).toFixed(1) + "M";
 }
 
 export const Monitor = ({
-  getCurrentValue,
-  consumptionHistory,
-  capacity,
+  getRateLimitValueQuery,
+  opts,
+  consumptionHistory = [],
+  height = "320px",
 }: MonitorProps) => {
   const [timelineData, setTimelineData] = useState<
     Array<{ timestamp: number; value: number }>
@@ -31,12 +44,23 @@ export const Monitor = ({
     dpr: number;
   } | null>(null);
 
+  const { check } = useRateLimit(getRateLimitValueQuery, opts);
+  const raw = useQuery(getRateLimitValueQuery, {
+    config: opts?.config,
+    name: opts?.name,
+    key: opts?.key,
+    sampleShards: opts?.sampleShards,
+  });
+
+  const capacity = raw?.config.capacity ?? 1;
+
   // Update timeline data every 100ms with calculated values
   useEffect(() => {
     const updateTimeline = () => {
       const now = Date.now();
-      const currentValue = getCurrentValue();
-      const newPoint = { timestamp: now, value: currentValue };
+      const currentValue = check(now);
+      if (!currentValue) return;
+      const newPoint = { timestamp: now, value: currentValue.value };
 
       setTimelineData((prev) => {
         const filtered = prev.filter((point) => now - point.timestamp < 10000); // Keep last 10 seconds
@@ -53,7 +77,7 @@ export const Monitor = ({
     return () => {
       clearInterval(interval);
     };
-  }, [getCurrentValue]);
+  }, [check]);
 
   // Setup canvas with proper DPI scaling (only when size changes)
   const setupCanvas = useCallback(() => {
@@ -247,7 +271,7 @@ export const Monitor = ({
         (Math.max(0, lastPoint.value) / (capacity + 2)) * plotHeight;
 
       // Value label with modern styling (positioned to the right of the graph)
-      const labelText = lastPoint.value.toFixed(1);
+      const labelText = formatNumber(lastPoint.value);
       const labelMetrics = ctx.measureText(labelText);
       const labelWidth = labelMetrics.width + 16;
       const labelHeight = 24;
@@ -375,7 +399,7 @@ export const Monitor = ({
     <div
       ref={containerRef}
       className="relative w-full bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200"
-      style={{ height: "320px" }}
+      style={{ height }}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
     </div>

@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, useCallback, useMemo } from "react";
+import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { calculateRateLimit } from "@convex-dev/rate-limiter";
 import { Monitor } from "./Monitor";
 
 interface ConsumptionEvent {
@@ -36,37 +35,10 @@ export const Playground = () => {
   );
 
   // API calls
-  const rateLimit = useQuery(api.playground.getValue, { config });
   const consumeTokens = useMutation(api.playground.consumeRateLimit);
   const resetRateLimit = useMutation(api.playground.resetRateLimit);
-  const getServerTime = useMutation(api.playground.getServerTime);
-  const [serverOffset, setServerOffset] = useState(0);
-
-  useEffect(() => {
-    getServerTime().then((time) => {
-      setServerOffset(time - Date.now());
-    });
-  }, [getServerTime]);
 
   // Create getCurrentValue function for Monitor
-  const getCurrentValue = useCallback(() => {
-    if (!rateLimit) return 0;
-
-    const now = Date.now();
-    const serverNow = now + serverOffset; // Convert to server time
-
-    // Calculate current value using server time for rate limit calculation
-    const currentState = { value: rateLimit.value, ts: rateLimit.ts };
-    const calculated = calculateRateLimit(
-      currentState,
-      rateLimit.config,
-      serverNow, // Use server time here
-      0
-    );
-
-    return calculated.value;
-  }, [rateLimit, serverOffset]);
-
   // Helper functions
   const handleConsume = useCallback(
     async (count: number) => {
@@ -234,9 +206,13 @@ export const Playground = () => {
             </p>
           </div>
           <Monitor
-            getCurrentValue={getCurrentValue}
+            getRateLimitValueQuery={api.playground.getRateLimit}
             consumptionHistory={consumptionHistory}
-            capacity={capacity}
+            opts={{
+              name: "demo",
+              config,
+              getServerTimeMutation: api.playground.getServerTime,
+            }}
           />
           <div className="p-6">
             {/* Legend */}
