@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.12 alpha
+
+- Limit ctx arg type to not require supporting "public" function running
+
 ## 0.2.11
 
 - Allow passing config to hookAPI
