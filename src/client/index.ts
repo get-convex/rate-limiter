@@ -1,8 +1,9 @@
 import {
   type Expand,
+  type FunctionArgs,
   type FunctionReference,
+  type FunctionReturnType,
   type GenericDataModel,
-  type GenericMutationCtx,
   type GenericQueryCtx,
   mutationGeneric,
   queryGeneric,
@@ -288,11 +289,17 @@ export default RateLimiter;
 
 // Type utilities
 
-type RunQueryCtx = {
-  runQuery: GenericQueryCtx<GenericDataModel>["runQuery"];
+export type RunQueryCtx = {
+  runQuery: <Query extends FunctionReference<"query", "internal">>(
+    query: Query,
+    args: FunctionArgs<Query>
+  ) => Promise<FunctionReturnType<Query>>;
 };
-type RunMutationCtx = {
-  runMutation: GenericMutationCtx<GenericDataModel>["runMutation"];
+export type RunMutationCtx = RunQueryCtx & {
+  runMutation: <Mutation extends FunctionReference<"mutation", "internal">>(
+    mutation: Mutation,
+    args: FunctionArgs<Mutation>
+  ) => Promise<FunctionReturnType<Mutation>>;
 };
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
