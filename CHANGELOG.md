@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.12 alpha
+## 0.2.12
 
 - Limit ctx arg type to not require supporting "public" function running
 
