@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.13
+
+- Support React 18.2.0 explicitly
+
 ## 0.2.12
 
 - Limit ctx arg type to not require supporting "public" function running
