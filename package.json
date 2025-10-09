@@ -57,6 +57,7 @@
         "default": "./dist/commonjs/client/index.js"
       }
     },
+    "./test": "./src/test.ts",
     "./react": {
       "import": {
         "@convex-dev/react-source": "./src/react/index.ts",
