@@ -2,12 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import {
   calculateRateLimit,
-  fixedWindowValidator,
   getValueReturns,
   rateLimitArgs,
   configValidator,
   rateLimitReturns,
-  tokenBucketValidator,
+  type GetValueReturns,
 } from "../shared.js";
 import {
   checkRateLimitOrThrow,
@@ -51,7 +50,7 @@ export const getValue = query({
     sampleShards: v.optional(v.number()),
   },
   returns: getValueReturns,
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GetValueReturns> => {
     const config = configWithDefaults(args.config);
     const samplesToTake = Math.min(args.sampleShards || 1, config.shards);
 
@@ -99,7 +98,6 @@ export const getValue = query({
     };
   },
 });
-
 
 export const resetRateLimit = mutation({
   args: {

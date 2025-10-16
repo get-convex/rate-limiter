@@ -8,39 +8,201 @@
  * @module
  */
 
-import type * as example from "../example.js";
-import type * as loadTest from "../loadTest.js";
-import type * as playground from "../playground.js";
-
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type { FunctionReference } from "convex/server";
 
 /**
- * A utility for referencing Convex functions in your app's API.
+ * A utility for referencing Convex functions in your app's public API.
  *
  * Usage:
  * ```js
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-declare const fullApi: ApiFromModules<{
-  example: typeof example;
-  loadTest: typeof loadTest;
-  playground: typeof playground;
-}>;
-declare const fullApiWithMounts: typeof fullApi;
+export declare const api: {
+  example: {
+    getRateLimit: FunctionReference<
+      "query",
+      "public",
+      {
+        config?:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: null;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        key?: string;
+        name?: string;
+        sampleShards?: number;
+      },
+      {
+        config:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: null;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        shard: number;
+        ts: number;
+        value: number;
+      }
+    >;
+    getServerTime: FunctionReference<"mutation", "public", {}, number>;
+    consumeTokens: FunctionReference<
+      "mutation",
+      "public",
+      { count?: number },
+      any
+    >;
+  };
+  playground: {
+    getRateLimit: FunctionReference<
+      "query",
+      "public",
+      {
+        config?:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: null;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        key?: string;
+        name?: string;
+        sampleShards?: number;
+      },
+      {
+        config:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: null;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        shard: number;
+        ts: number;
+        value: number;
+      }
+    >;
+    getServerTime: FunctionReference<"mutation", "public", {}, number>;
+    consumeRateLimit: FunctionReference<
+      "mutation",
+      "public",
+      {
+        config:
+          | {
+              capacity?: number;
+              kind: "token bucket";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: null;
+            }
+          | {
+              capacity?: number;
+              kind: "fixed window";
+              maxReserved?: number;
+              period: number;
+              rate: number;
+              shards?: number;
+              start?: number;
+            };
+        count: number;
+        reserve: boolean;
+      },
+      any
+    >;
+    resetRateLimit: FunctionReference<"mutation", "public", {}, any>;
+  };
+};
 
-export declare const api: FilterApi<
-  typeof fullApiWithMounts,
-  FunctionReference<any, "public">
->;
-export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
-  FunctionReference<any, "internal">
->;
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: {
+  example: {
+    test: FunctionReference<"mutation", "internal", {}, any>;
+    check: FunctionReference<"query", "internal", { key?: string }, any>;
+    throws: FunctionReference<"mutation", "internal", {}, any>;
+    inlineConfig: FunctionReference<"mutation", "internal", {}, any>;
+    inlineVanilla: FunctionReference<"mutation", "internal", {}, any>;
+  };
+  loadTest: {
+    loadTestRateLimiter: FunctionReference<
+      "action",
+      "internal",
+      {
+        capacity?: number;
+        duration?: number;
+        overRequest?: number;
+        period?: number;
+        qps?: number;
+        qpsPerShard?: number;
+        qpsPerWorker?: number;
+        rate?: number;
+        shardCapacity?: number;
+        shards?: number;
+        strategy?: "token bucket" | "fixed window";
+      },
+      any
+    >;
+  };
+};
 
 export declare const components: {
   rateLimiter: {
