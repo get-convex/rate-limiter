@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.14 alpha
+## 0.2.14
 
 - Adds a /test endpoint to ease testing
 
