@@ -6,7 +6,7 @@ import {
   type GetValueArgs,
   type GetValueReturns,
   type RateLimitConfig,
-} from "../shared";
+} from "../shared.js";
 
 export type UseRateLimitOptions = {
   name?: string;
