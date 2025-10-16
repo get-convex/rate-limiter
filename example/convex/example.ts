@@ -2,7 +2,7 @@ import {
   HOUR,
   isRateLimitError,
   MINUTE,
-  RateLimitConfig,
+  type RateLimitConfig,
   RateLimiter,
   SECOND,
 } from "@convex-dev/rate-limiter";

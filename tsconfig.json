@@ -8,17 +8,20 @@
     "lib": ["ES2021", "dom"],
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
-    "verbatimModuleSyntax": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "skipLibCheck": true,
+    // We enforce stricter module resolution for Node16 compatibility
+    // But when building we use Bundler & ESNext for ESM
+    "module": "Node16",
+    "moduleResolution": "NodeNext",
 
+    "composite": true,
     "isolatedModules": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "rootDir": "./src",
     "outDir": "./dist",
-    "esModuleInterop": true
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
   },
   "include": ["./src/**/*"]
 }
