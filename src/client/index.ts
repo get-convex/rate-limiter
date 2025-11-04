@@ -35,7 +35,6 @@ export function isRateLimitError(
 ): error is { data: RateLimitError } {
   return (
     error instanceof ConvexError &&
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (error as any).data["kind"] === "RateLimited"
   );
 }
