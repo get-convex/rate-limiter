@@ -8,8 +8,8 @@ test("isRateLimitError", () => {
         kind: "RateLimited",
         name: "foo",
         retryAfter: 1,
-      } as RateLimitError)
-    )
+      } as RateLimitError),
+    ),
   ).toBe(true);
   expect(isRateLimitError(new ConvexError({ kind: "foo" }))).toBe(false);
 });

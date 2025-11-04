@@ -75,8 +75,8 @@ describe.each(["token bucket", "fixed window"] as const)(
               rate: 1,
               period: Second,
             },
-          })
-        )
+          }),
+        ),
       ).rejects.toThrow("Rate limit simple count 2 exceeds 1.");
     });
 
@@ -200,14 +200,14 @@ describe.each(["token bucket", "fixed window"] as const)(
         { value: 0, ts: Date.now() },
         config,
         100,
-        true
+        true,
       );
       expect(reserved.status.ok).toBe(true);
       expect(reserved.status.retryAfter).toBeGreaterThan(0);
       const followup = _checkRateLimitInternal(reserved, config);
       expect(followup.status.ok).toBe(false);
       expect(followup.status.retryAfter).toBeGreaterThan(
-        reserved.status.retryAfter!
+        reserved.status.retryAfter!,
       );
     });
 
@@ -222,14 +222,14 @@ describe.each(["token bucket", "fixed window"] as const)(
         { value: 1, ts: Date.now() },
         config,
         2,
-        true
+        true,
       );
       expect(reserved.status.ok).toBe(true);
       expect(reserved.status.retryAfter).toBeGreaterThan(0);
       const followup = _checkRateLimitInternal(reserved, config);
       expect(followup.status.ok).toBe(false);
       expect(followup.status.retryAfter).toBeGreaterThan(
-        reserved.status.retryAfter!
+        reserved.status.retryAfter!,
       );
     });
 
@@ -248,10 +248,10 @@ describe.each(["token bucket", "fixed window"] as const)(
               maxReserved: 2,
             },
           });
-        })
+        }),
       ).rejects.toThrow("Rate limit simple count 4 exceeds 3.");
     });
-  }
+  },
 );
 
 describe.each([1, 2, 3, 4] as const)("sharding: %s", (shards) => {
@@ -321,7 +321,7 @@ describe.each([1, 2, 3, 4] as const)("sharding: %s", (shards) => {
           config,
           throws: true,
         });
-      })
+      }),
     ).rejects.toThrowError(ConvexError);
   });
 

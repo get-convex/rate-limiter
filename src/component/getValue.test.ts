@@ -107,5 +107,5 @@ describe.each(["token bucket", "fixed window"] as const)(
         });
       });
     });
-  }
+  },
 );

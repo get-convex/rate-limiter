@@ -26,7 +26,7 @@ export const { getRateLimit, getServerTime } = rateLimiter.hookAPI(
       const user = await ctx.auth.getUserIdentity();
       return user?.subject ?? "anonymous";
     },
-  }
+  },
 );
 
 export const consumeTokens = mutation({
@@ -139,13 +139,13 @@ export const inlineVanilla = internalMutation({
       } as RateLimitConfig;
       const before = await ctx.runMutation(
         components.rateLimiter.lib.rateLimit,
-        { name: "simple " + kind, config }
+        { name: "simple " + kind, config },
       );
       assert(before.ok);
       assert(before.retryAfter === undefined);
       const after = await ctx.runQuery(
         components.rateLimiter.lib.checkRateLimit,
-        { name: "simple " + kind, config }
+        { name: "simple " + kind, config },
       );
       assert(!after.ok);
       assert(after.retryAfter! > 0);
@@ -154,7 +154,7 @@ export const inlineVanilla = internalMutation({
       });
       const after2 = await ctx.runQuery(
         components.rateLimiter.lib.checkRateLimit,
-        { name: "simple " + kind, config }
+        { name: "simple " + kind, config },
       );
       assert(after2.ok);
       assert(after2.retryAfter === undefined);
@@ -164,7 +164,7 @@ export const inlineVanilla = internalMutation({
 
 function assert<T extends string | boolean | object | undefined | null>(
   condition: T,
-  message?: string
+  message?: string,
 ): condition is Exclude<T, false | undefined | null | ""> {
   if (!condition) {
     throw new Error(message);

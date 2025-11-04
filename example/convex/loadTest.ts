@@ -22,7 +22,7 @@ export const loadTestRateLimiter = internalAction({
     qpsPerShard: v.optional(v.number()),
     qpsPerWorker: v.optional(v.number()),
     strategy: v.optional(
-      v.union(v.literal("token bucket"), v.literal("fixed window"))
+      v.union(v.literal("token bucket"), v.literal("fixed window")),
     ),
   },
   handler: async (ctx, args) => {
@@ -71,7 +71,7 @@ export const loadTestRateLimiter = internalAction({
             const { ok, retryAfter } = await rateLimiter.limit(
               ctx,
               "llmRequests",
-              { config }
+              { config },
             );
             const after = Date.now();
             if (ok) {
@@ -90,12 +90,12 @@ export const loadTestRateLimiter = internalAction({
           }
         }
         return [successes, limited, occFailures];
-      })
+      }),
     );
     console.debug({ successes });
     const [succeeded, rateLimited, occFailures] = successes.reduce(
       (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-      [0, 0, 0]
+      [0, 0, 0],
     );
     const total = succeeded + rateLimited + occFailures;
     return {

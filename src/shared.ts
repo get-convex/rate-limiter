@@ -39,7 +39,7 @@ export const fixedWindowValidator = v.object({
 
 export const configValidator = v.union(
   tokenBucketValidator,
-  fixedWindowValidator
+  fixedWindowValidator,
 );
 
 /**
@@ -101,7 +101,7 @@ export const rateLimitReturns = v.union(
     ok: v.literal(false),
     // TODO: include the shard here they should retry with
     retryAfter: v.number(),
-  })
+  }),
 );
 
 export type RateLimitReturns = Infer<typeof rateLimitReturns>;
@@ -138,14 +138,14 @@ export function calculateRateLimit(
   existing: { value: number; ts: number } | null,
   config: RateLimitConfig,
   now: number = Date.now(),
-  count: number = 0
+  count: number = 0,
 ) {
   const max = config.capacity ?? config.rate;
   const state = existing ?? {
     value: max,
     ts:
       config.kind === "fixed window"
-        ? config.start ?? now - Math.floor(Math.random() * config.period)
+        ? (config.start ?? now - Math.floor(Math.random() * config.period))
         : now,
   };
 

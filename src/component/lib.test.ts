@@ -53,7 +53,7 @@ describe.each(["token bucket", "fixed window"] as const)(
           await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
-          })
+          }),
       );
       expect(global.ok).toBe(true);
       expect(global.retryAfter).toBe(undefined);
@@ -62,7 +62,7 @@ describe.each(["token bucket", "fixed window"] as const)(
           await ctx.runMutation(api.lib.rateLimit, {
             name,
             config,
-          })
+          }),
       );
       expect(after.ok).toBe(false);
       expect(after.retryAfter).toBeGreaterThan(0);
@@ -81,7 +81,7 @@ describe.each(["token bucket", "fixed window"] as const)(
               period: Second,
             },
           });
-        })
+        }),
       ).rejects.toThrow("Rate limit simple count 2 exceeds 1.");
     });
 
@@ -95,7 +95,7 @@ describe.each(["token bucket", "fixed window"] as const)(
             name,
             config,
             key: "key",
-          })
+          }),
       );
       expect(keyed.ok).toBe(true);
       expect(keyed.retryAfter).toBe(undefined);
@@ -105,7 +105,7 @@ describe.each(["token bucket", "fixed window"] as const)(
             name,
             config,
             key: "key2",
-          })
+          }),
       );
       expect(keyed2.ok).toBe(true);
       expect(keyed2.retryAfter).toBe(undefined);
@@ -395,8 +395,8 @@ describe.each(["token bucket", "fixed window"] as const)(
               maxReserved: 2,
             },
           });
-        })
+        }),
       ).rejects.toThrow("Rate limit simple count 4 exceeds 3.");
     });
-  }
+  },
 );

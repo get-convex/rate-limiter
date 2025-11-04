@@ -47,7 +47,7 @@ export type GetServerTimeMutation = FunctionReference<
  */
 export function useRateLimit(
   getRateLimitValueQuery: GetRateLimitValueQuery,
-  opts?: UseRateLimitOptions
+  opts?: UseRateLimitOptions,
 ) {
   // This is the offset between the client and server time.
   // clientTime + timeOffset = serverTime
@@ -87,7 +87,7 @@ export function useRateLimit(
         rateLimitData,
         rateLimitData.config,
         serverTime,
-        count
+        count,
       );
       return {
         value: value.value,
@@ -100,7 +100,7 @@ export function useRateLimit(
           : undefined,
       };
     },
-    [rateLimitData]
+    [rateLimitData],
   );
 
   const currentValue = check(Date.now(), count ?? 1);

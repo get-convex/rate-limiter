@@ -15,7 +15,7 @@ export const MIN_CHOOSE_TWO = 3;
 
 export async function checkRateLimitOrThrow(
   db: DatabaseReader,
-  args: RateLimitArgs
+  args: RateLimitArgs,
 ) {
   const result = await checkRateLimitSharded(db, args);
   if (result.status.retryAfter && args.throws) {
@@ -30,7 +30,7 @@ export async function checkRateLimitOrThrow(
 
 async function checkRateLimitSharded(
   db: DatabaseReader,
-  args: RateLimitArgs
+  args: RateLimitArgs,
 ): Promise<{
   status: RateLimitReturns;
   updates: {
@@ -48,14 +48,14 @@ async function checkRateLimitSharded(
   const one = await checkShard(
     db,
     shardArgs,
-    Math.floor(Math.random() * shards)
+    Math.floor(Math.random() * shards),
   );
   if (!one.existing || shards < MIN_CHOOSE_TWO) return returnSingle(one);
   // Find another shard to check
   const two = await checkShard(
     db,
     shardArgs,
-    (one.shard + 1 + Math.floor(Math.random() * (shards - 1))) % shards
+    (one.shard + 1 + Math.floor(Math.random() * (shards - 1))) % shards,
   );
   if (one.status.ok && !two.status.ok) {
     return returnSingle(one);
@@ -77,13 +77,13 @@ async function checkRateLimitSharded(
     config,
     // Calculated so they both end up with the same value, to help balance.
     one.value + count - balance / 2,
-    args.reserve
+    args.reserve,
   );
   const twoShared = _checkRateLimitInternal(
     two.existing,
     config,
     two.value + count - balance / 2,
-    args.reserve
+    args.reserve,
   );
   if (!oneShared.status.ok && !twoShared.status.ok) {
     // Still didn't work, wait until there's enough combined capacity.
@@ -92,7 +92,7 @@ async function checkRateLimitSharded(
         ok: false,
         retryAfter: Math.max(
           oneShared.status.retryAfter,
-          twoShared.status.retryAfter
+          twoShared.status.retryAfter,
         ),
       } as const,
       updates: [],
@@ -122,7 +122,7 @@ async function checkRateLimitSharded(
   }
   const retryAfter = Math.max(
     oneShared.status.retryAfter ?? 0,
-    twoShared.status.retryAfter ?? 0
+    twoShared.status.retryAfter ?? 0,
   );
   return { status: { ok, retryAfter }, updates };
 }
@@ -151,14 +151,14 @@ function validateRequest(args: RateLimitArgs) {
       if (count > max + maxReserved) {
         throw new Error(
           `Rate limit ${args.name} count ${count} exceeds ${(max + maxReserved).toFixed(2)}` +
-            (shards > 1 ? ` per ${shards} shards.` : ".")
+            (shards > 1 ? ` per ${shards} shards.` : "."),
         );
       }
     }
   } else if (count > max) {
     throw new Error(
       `Rate limit ${args.name} count ${count} exceeds ${max}` +
-        (shards > 1 ? ` per ${shards} shards.` : ".")
+        (shards > 1 ? ` per ${shards} shards.` : "."),
     );
   }
 }
@@ -171,7 +171,7 @@ function returnSingle(result: Awaited<ReturnType<typeof checkShard>>) {
 async function checkShard(
   db: DatabaseReader,
   args: RateLimitArgs,
-  shard: number
+  shard: number,
 ) {
   const existing = await getShard(db, args.name, args.key, shard);
   const { config, count, reserve } = args;
@@ -183,12 +183,12 @@ export async function getShard(
   db: DatabaseReader,
   name: string,
   key: string | undefined,
-  shard: number
+  shard: number,
 ) {
   return db
     .query("rateLimits")
     .withIndex("name", (q) =>
-      q.eq("name", name).eq("key", key).eq("shard", shard)
+      q.eq("name", name).eq("key", key).eq("shard", shard),
     )
     .unique();
 }
@@ -211,14 +211,14 @@ export function _checkRateLimitInternal(
   existing: { value: number; ts: number } | null,
   config: RateLimitConfig,
   count: number = 1,
-  reserve: boolean = false
+  reserve: boolean = false,
 ) {
   const now = Date.now();
   const { value, ts, retryAfter } = calculateRateLimit(
     existing,
     config,
     now,
-    count
+    count,
   );
 
   if (value < 0) {

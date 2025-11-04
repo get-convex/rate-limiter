@@ -67,12 +67,12 @@ export const getValue = query({
     const allShards = (
       await Promise.all(
         selectedShards.map((shard) =>
-          getShard(ctx.db, args.name, args.key, shard)
-        )
+          getShard(ctx.db, args.name, args.key, shard),
+        ),
       )
     ).map(
       (state, i) =>
-        state ?? { value: config.capacity, ts: 0, shard: selectedShards[i]! }
+        state ?? { value: config.capacity, ts: 0, shard: selectedShards[i]! },
     );
 
     const maxTs = Math.max(...allShards.map((shard) => shard.ts));
@@ -83,7 +83,7 @@ export const getValue = query({
       maxTs: calculateRateLimit(state, config, maxTs),
     }));
     const maxShard = values.reduce((a, b) =>
-      a.maxTs.value > b.maxTs.value ? a : b
+      a.maxTs.value > b.maxTs.value ? a : b,
     );
     if (config.kind === "fixed window" && !config.start) {
       // we can modify here b/c config is our copy
@@ -123,7 +123,7 @@ export const clearAll = mutation({
     const results = await ctx.db
       .query("rateLimits")
       .withIndex("by_creation_time", (q) =>
-        q.lte("_creationTime", args.before ?? Date.now())
+        q.lte("_creationTime", args.before ?? Date.now()),
       )
       .order("desc")
       .take(100);
