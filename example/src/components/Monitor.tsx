@@ -280,7 +280,7 @@ export function Monitor({
         labelX + 2,
         labelY - labelHeight + 2,
         labelWidth,
-        labelHeight
+        labelHeight,
       );
 
       ctx.fillStyle = "#ffffff";
@@ -299,7 +299,7 @@ export function Monitor({
 
     // Draw consumption dots at bottom of graph
     const recentEvents = consumptionHistory.filter(
-      (event) => now - event.timestamp < 10000
+      (event) => now - event.timestamp < 10000,
     );
 
     recentEvents.forEach((event) => {
@@ -387,6 +387,6 @@ export function Monitor({
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
     </div>
   );
-};
+}
 
 export default Monitor;

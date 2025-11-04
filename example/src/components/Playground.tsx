@@ -12,7 +12,7 @@ interface ConsumptionEvent {
 export const Playground = () => {
   // Configuration state
   const [strategy, setStrategy] = useState<"token bucket" | "fixed window">(
-    "token bucket"
+    "token bucket",
   );
   const [period, setPeriod] = useState(2); // seconds
   const rate = 1; // Fixed at 1 token per period
@@ -31,7 +31,7 @@ export const Playground = () => {
       period: period * 1000, // convert to milliseconds
       capacity,
     }),
-    [strategy, rate, period, capacity]
+    [strategy, rate, period, capacity],
   );
 
   // API calls
@@ -66,7 +66,7 @@ export const Playground = () => {
         setConsumptionHistory((prev) => [...prev, event]);
       }
     },
-    [consumeTokens, config]
+    [consumeTokens, config],
   );
 
   const handleReset = useCallback(async () => {

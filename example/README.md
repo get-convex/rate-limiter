@@ -1,6 +1,7 @@
 # Rate Limiter Example App
 
-This example demonstrates how to use the rate-limiter component's React hook in a Vite application.
+This example demonstrates how to use the rate-limiter component's React hook in
+a Vite application.
 
 ## Features
 
@@ -12,16 +13,19 @@ This example demonstrates how to use the rate-limiter component's React hook in 
 ## Getting Started
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
 2. Start the development server:
+
 ```bash
 npm run dev
 ```
 
-3. Open your browser to the URL shown in the terminal (usually http://localhost:5173)
+3. Open your browser to the URL shown in the terminal (usually
+   http://localhost:5173)
 
 ## How It Works
 
@@ -35,6 +39,7 @@ The example app demonstrates:
 ## Implementation Details
 
 The `useRateLimit` hook:
+
 - Calculates clock skew between client and server using a one-time mutation
 - Provides real-time token availability information
 - Calculates retry times based on token consumption rate

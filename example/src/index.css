@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light;
   color: #1f2937;
-    background-color: #f9fafb;
+  background-color: #f9fafb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -39,8 +39,8 @@ h1 {
   line-height: 1.1;
   background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
   -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 button {
@@ -150,5 +150,7 @@ button:focus-visible {
 }
 
 .slider:focus::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.2),
+    0 2px 8px rgba(59, 130, 246, 0.3);
 }

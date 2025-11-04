@@ -23,21 +23,22 @@ const status = await rateLimiter.limit(ctx, "sendMessage", { key: userId });
 // Use the React hook to check the rate limit
 const { status, check } = useRateLimit(api.example.getRateLimit, { count });
 ```
+
 See below for more details on usage.
 
 **What is rate limiting?**
 
-Rate limiting is the technique of controlling how often actions can be performed,
-typically on a server. There are a host of options for achieving this, most of
-which operate at the network layer.
+Rate limiting is the technique of controlling how often actions can be
+performed, typically on a server. There are a host of options for achieving
+this, most of which operate at the network layer.
 
 **What is application-layer rate limiting?**
 
-Application-layer rate limiting happens in your app's code where you are handling
-authentication, authorization, and other business logic.
-It allows you to define nuanced rules, and enforce policies more fairly.
-It is not the first line of defense for a sophisticated DDOS attack
-(which thankfully are extremely rare), but will serve most real-world use cases.
+Application-layer rate limiting happens in your app's code where you are
+handling authentication, authorization, and other business logic. It allows you
+to define nuanced rules, and enforce policies more fairly. It is not the first
+line of defense for a sophisticated DDOS attack (which thankfully are extremely
+rare), but will serve most real-world use cases.
 
 **What differentiates this approach?**
 
@@ -45,21 +46,25 @@ It is not the first line of defense for a sophisticated DDOS attack
 - Configurable for fixed window or token bucket algorithms.
 - Efficient storage and compute: storage is not proportional to requests.
 - Configurable sharding for scalability.
-- Transactional evaluation: all rate limit changes will roll back if your mutation fails.
-- Fairness guarantees via credit "reservation": save yourself from exponential backoff.
+- Transactional evaluation: all rate limit changes will roll back if your
+  mutation fails.
+- Fairness guarantees via credit "reservation": save yourself from exponential
+  backoff.
 - Opt-in "rollover" or "burst" allowance via a configurable `capacity`.
-- Fails closed, not open: avoid cascading failure when traffic overwhelms your rate limits.
+- Fails closed, not open: avoid cascading failure when traffic overwhelms your
+  rate limits.
 
-See the associated [Stack post](https://stack.convex.dev/rate-limiting)
-for more details and background.
+See the associated [Stack post](https://stack.convex.dev/rate-limiting) for more
+details and background.
 
 ## Pre-requisite: Convex
 
-You'll need an existing Convex project to use the component.
-Convex is a hosted backend platform, including a database, serverless functions,
-and a ton more you can learn about [here](https://docs.convex.dev/get-started).
+You'll need an existing Convex project to use the component. Convex is a hosted
+backend platform, including a database, serverless functions, and a ton more you
+can learn about [here](https://docs.convex.dev/get-started).
 
-Run `npm create convex` or follow any of the [quickstarts](https://docs.convex.dev/home) to set one up.
+Run `npm create convex` or follow any of the
+[quickstarts](https://docs.convex.dev/home) to set one up.
 
 ## Installation
 
@@ -69,7 +74,8 @@ Install the component package:
 npm install @convex-dev/rate-limiter
 ```
 
-Create a `convex.config.ts` file in your app's `convex/` folder and install the component by calling `use`:
+Create a `convex.config.ts` file in your app's `convex/` folder and install the
+component by calling `use`:
 
 ```ts
 // convex/convex.config.ts
@@ -107,19 +113,19 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 
 ### Strategies:
 
-The **`token bucket`** approach provides guarantees for overall consumption via the
-`rate` per `period` at which tokens are added, while also allowing unused
-tokens to accumulate (like "rollover" minutes) up to some `capacity` value.
-So if you could normally send 10 per minute, with a capacity of 20, then every
-two minutes you could send 20, or if in the last two minutes you only sent 5,
-you can send 15 now.
+The **`token bucket`** approach provides guarantees for overall consumption via
+the `rate` per `period` at which tokens are added, while also allowing unused
+tokens to accumulate (like "rollover" minutes) up to some `capacity` value. So
+if you could normally send 10 per minute, with a capacity of 20, then every two
+minutes you could send 20, or if in the last two minutes you only sent 5, you
+can send 15 now.
 
-The **`fixed window`** approach differs in that the tokens are granted all at once,
-every `period` milliseconds. It similarly allows accumulating "rollover" tokens
-up to a `capacity` (defaults to the `rate` for both rate limit strategies).
-You can specify a custom `start` time if e.g. you want the period to reset at a
-specific time of day. By default it will be random to help space out requests
-that are retrying.
+The **`fixed window`** approach differs in that the tokens are granted all at
+once, every `period` milliseconds. It similarly allows accumulating "rollover"
+tokens up to a `capacity` (defaults to the `rate` for both rate limit
+strategies). You can specify a custom `start` time if e.g. you want the period
+to reset at a specific time of day. By default it will be random to help space
+out requests that are retrying.
 
 ## Usage
 
@@ -132,10 +138,11 @@ const { ok, retryAfter } = await rateLimiter.limit(ctx, "freeTrialSignUp");
 - `ok` is whether it successfully consumed the resource
 - `retryAfter` is when it would have succeeded in the future.
 
-**Note**: If you have many clients using the `retryAfter` to decide when to retry,
-defend against a [thundering herd](https://en.wikipedia.org/wiki/Thundering_herd_problem)
-by adding some [jitter](#adding-jitter).
-Or use the `reserve` functionality discussed [below](#reserving-capacity).
+**Note**: If you have many clients using the `retryAfter` to decide when to
+retry, defend against a
+[thundering herd](https://en.wikipedia.org/wiki/Thundering_herd_problem) by
+adding some [jitter](#adding-jitter). Or use the `reserve` functionality
+discussed [below](#reserving-capacity).
 
 ### Per-user rate limit:
 
@@ -157,9 +164,9 @@ const status = await rateLimiter.limit(ctx, "llmTokens", { count: tokens });
 ### Throw automatically
 
 By default it will return `{ ok, retryAfter }`. To have it throw automatically
-when the limit is exceeded, use `throws`.
-It throws a `ConvexError` with `RateLimitError` data (`data: {kind, name, retryAfter}`)
-instead of returning when `ok` is false.
+when the limit is exceeded, use `throws`. It throws a `ConvexError` with
+`RateLimitError` data (`data: {kind, name, retryAfter}`) instead of returning
+when `ok` is false.
 
 ```ts
 // Automatically throw an error if the rate limit is hit
@@ -198,7 +205,7 @@ First, define the server API to get the rate limit value:
 export const { getRateLimit, getServerTime } = rateLimiter.hookAPI(
   "sendMessage",
   // Optionally provide a key function to get the key for the rate limit
-  { key: async (ctx) => getUserId(ctx) }
+  { key: async (ctx) => getUserId(ctx) },
 );
 ```
 
@@ -223,15 +230,23 @@ You can fetch the current value of a rate limit directly, if you want to know
 the concrete value and timestamp it was last updated.
 
 ```ts
-const { config, value, ts } = await rateLimiter.getValue(ctx, "sendMessage", { key: userId });
+const { config, value, ts } = await rateLimiter.getValue(ctx, "sendMessage", {
+  key: userId,
+});
 ```
 
-And you can use `calculateRateLimit` to calculate the value at a given timestamp:
+And you can use `calculateRateLimit` to calculate the value at a given
+timestamp:
 
 ```ts
 import { calculateRateLimit } from "@convex-dev/rate-limiter";
 
-const { config, value, ts } = calculateRateLimit({ value, ts }, config, Date.now(), count || 0);
+const { config, value, ts } = calculateRateLimit(
+  { value, ts },
+  config,
+  Date.now(),
+  count || 0,
+);
 ```
 
 ### Scaling rate limiting with shards
@@ -245,11 +260,12 @@ contention for these values, it causes
 Convex automatically retries these a number of times with backoff, but it's
 still best to avoid them.
 
-Not to worry! To provide high throughput, we can use a technique called "sharding"
-where we break up the total capacity into individual buckets, or "shards".
-When we go to use some of that capacity, we check a random shard.<sup>[1](#power-of-two)</sup>
-While sometimes we'll get unlucky and get rate limited when there was capacity
-elsewhere, we'll never voilate the rate limit's upper bound.
+Not to worry! To provide high throughput, we can use a technique called
+"sharding" where we break up the total capacity into individual buckets, or
+"shards". When we go to use some of that capacity, we check a random
+shard.<sup>[1](#power-of-two)</sup> While sometimes we'll get unlucky and get
+rate limited when there was capacity elsewhere, we'll never voilate the rate
+limit's upper bound.
 
 ```ts
 const rateLimiter = new RateLimiter(components.rateLimiter, {
@@ -259,12 +275,11 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 });
 ```
 
-Here we're using 10 shards to handle 1,000 QPM.
-If you want some rough math to guess at how many shards to add, take the max
-queries per second you expect and divide by two.
-It's also useful for each shard to have five (ideally ten) or more capacity.
-In this case, we have ten (rate / shards) and don't expect normal traffic to
-exceed ~20 QPS.
+Here we're using 10 shards to handle 1,000 QPM. If you want some rough math to
+guess at how many shards to add, take the max queries per second you expect and
+divide by two. It's also useful for each shard to have five (ideally ten) or
+more capacity. In this case, we have ten (rate / shards) and don't expect normal
+traffic to exceed ~20 QPS.
 
 **Tip**: If you want a rate like `{ rate: 100, period: SECOND }` and you are
 flexible in the overall period, then you can shard this by increasing the rate
@@ -273,10 +288,12 @@ and period proportionally to get enough shards and capacity per shard:
 `{ shards: 50, rate: 1000, period: 10 * SECOND }`.
 
 #### Power of two
+
 We're actually going one step further and checking two shards and using the one
 with more capacity, to keep them relatively balanced, based on the
 [power of two technique](https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf).
-We will also combine the capacity of the two shards if neither has enough on their own.
+We will also combine the capacity of the two shards if neither has enough on
+their own.
 
 ### Reserving capacity:
 
@@ -284,8 +301,8 @@ You can also allow it to `reserve` capacity to avoid starvation on larger
 requests.
 
 When you reserve capacity ahead of time, the contract is that you can run your
-operation at the specified time (via the `retryAfter` field), at which point
-you don't have to re-check the rate limit. Your capacity has been "ear-marked".
+operation at the specified time (via the `retryAfter` field), at which point you
+don't have to re-check the rate limit. Your capacity has been "ear-marked".
 
 With this, you can queue up many operations and they will be run at spaced-out
 intervals, maximizing the utilization of the rate limit.
@@ -312,7 +329,7 @@ const myAction = internalAction({
             // When we run in the future, we can skip the rate limit check,
             // since we've just reserved that capacity.
             skipCheck: true,
-          }
+          },
         );
       }
     }
@@ -323,10 +340,10 @@ const myAction = internalAction({
 
 ### Adding jitter
 
-When too many users show up at once, it can cause network congestion,
-database contention, and consume other shared resources at an unnecessarily high rate.
-Instead we can return a random time within the next period to retry.
-Hopefully this is infrequent. This technique is referred to as adding "jitter."
+When too many users show up at once, it can cause network congestion, database
+contention, and consume other shared resources at an unnecessarily high rate.
+Instead we can return a random time within the next period to retry. Hopefully
+this is infrequent. This technique is referred to as adding "jitter."
 
 A simple implementation could look like:
 
@@ -334,9 +351,10 @@ A simple implementation could look like:
 const retryAfter = status.retryAfter + Math.random() * period;
 ```
 
-For the fixed window, we also introduce randomness by picking the start time of the window
-(from which all subsequent windows are based) randomly if config.start wasn't provided.
-This helps from all clients flooding requests at midnight and paging you.
+For the fixed window, we also introduce randomness by picking the start time of
+the window (from which all subsequent windows are based) randomly if
+config.start wasn't provided. This helps from all clients flooding requests at
+midnight and paging you.
 
 ## More resources
 

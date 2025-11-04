@@ -145,7 +145,7 @@ export function calculateRateLimit(
     value: max,
     ts:
       config.kind === "fixed window"
-        ? (config.start ?? now - Math.floor(Math.random() * config.period))
+        ? config.start ?? now - Math.floor(Math.random() * config.period)
         : now,
   };
 
