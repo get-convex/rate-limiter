@@ -66,6 +66,7 @@ export function useRateLimit(
         const latency = Date.now() - clientTime;
         setTimeOffset(serverTime - clientTime - latency / 2);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convex, !!getServerTimeMutation]);
 
   // Based on server time
@@ -100,7 +101,7 @@ export function useRateLimit(
           : undefined,
       };
     },
-    [rateLimitData],
+    [rateLimitData, timeOffset],
   );
 
   const currentValue = check(Date.now(), count ?? 1);
@@ -113,7 +114,7 @@ export function useRateLimit(
       };
     }
     return { status: { ok: true as const, retryAt: undefined }, check };
-  }, [currentValue]);
+  }, [currentValue, check]);
 
   useEffect(() => {
     if (ret?.status?.ok !== false) return;
