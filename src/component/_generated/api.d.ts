@@ -18,164 +18,35 @@ import type {
   FunctionReference,
 } from "convex/server";
 
+declare const fullApi: ApiFromModules<{
+  internal: typeof internal_;
+  lib: typeof lib;
+  time: typeof time;
+}>;
+
 /**
- * A utility for referencing Convex functions in your app's API.
+ * A utility for referencing Convex functions in your app's public API.
  *
  * Usage:
  * ```js
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-declare const fullApi: ApiFromModules<{
-  internal: typeof internal_;
-  lib: typeof lib;
-  time: typeof time;
-}>;
-export type Mounts = {
-  lib: {
-    checkRateLimit: FunctionReference<
-      "query",
-      "public",
-      {
-        config:
-          | {
-              capacity?: number;
-              kind: "token bucket";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: null;
-            }
-          | {
-              capacity?: number;
-              kind: "fixed window";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: number;
-            };
-        count?: number;
-        key?: string;
-        name: string;
-        reserve?: boolean;
-        throws?: boolean;
-      },
-      { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-    >;
-    clearAll: FunctionReference<
-      "mutation",
-      "public",
-      { before?: number },
-      null
-    >;
-    getServerTime: FunctionReference<"mutation", "public", {}, number>;
-    getValue: FunctionReference<
-      "query",
-      "public",
-      {
-        config:
-          | {
-              capacity?: number;
-              kind: "token bucket";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: null;
-            }
-          | {
-              capacity?: number;
-              kind: "fixed window";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: number;
-            };
-        key?: string;
-        name: string;
-        sampleShards?: number;
-      },
-      {
-        config:
-          | {
-              capacity?: number;
-              kind: "token bucket";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: null;
-            }
-          | {
-              capacity?: number;
-              kind: "fixed window";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: number;
-            };
-        shard: number;
-        ts: number;
-        value: number;
-      }
-    >;
-    rateLimit: FunctionReference<
-      "mutation",
-      "public",
-      {
-        config:
-          | {
-              capacity?: number;
-              kind: "token bucket";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: null;
-            }
-          | {
-              capacity?: number;
-              kind: "fixed window";
-              maxReserved?: number;
-              period: number;
-              rate: number;
-              shards?: number;
-              start?: number;
-            };
-        count?: number;
-        key?: string;
-        name: string;
-        reserve?: boolean;
-        throws?: boolean;
-      },
-      { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-    >;
-    resetRateLimit: FunctionReference<
-      "mutation",
-      "public",
-      { key?: string; name: string },
-      null
-    >;
-  };
-  time: {
-    getServerTime: FunctionReference<"mutation", "public", {}, number>;
-  };
-};
-// For now fullApiWithMounts is only fullApi which provides
-// jump-to-definition in component client code.
-// Use Mounts for the same type without the inference.
-declare const fullApiWithMounts: typeof fullApi;
-
 export declare const api: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "internal">
 >;
 

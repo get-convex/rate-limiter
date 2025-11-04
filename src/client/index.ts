@@ -9,7 +9,7 @@ import {
   queryGeneric,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import type { api } from "../component/_generated/api.js";
+import type { ComponentApi } from "../component/_generated/component.js";
 import type {
   RateLimitArgs,
   RateLimitConfig,
@@ -69,7 +69,7 @@ export class RateLimiter<
   Limits extends Record<string, RateLimitConfig> = Record<never, never>,
 > {
   constructor(
-    public component: RateLimiterApi,
+    public component: ComponentApi,
     public limits?: Limits
   ) {}
 
@@ -317,19 +317,6 @@ type WithKnownNameOrInlinedConfig<
           config: RateLimitConfig;
         })
 >;
-
-type UseApi<API> = Expand<{
-  [K in keyof API]: API[K] extends FunctionReference<
-    infer T,
-    "public",
-    infer A,
-    infer R,
-    infer P
-  >
-    ? FunctionReference<T, "internal", A, R, P>
-    : UseApi<API[K]>;
-}>;
-type RateLimiterApi = UseApi<typeof api>;
 
 type HookOpts<DataModel extends GenericDataModel> = {
   key?:

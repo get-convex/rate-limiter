@@ -1,6 +1,6 @@
 /* eslint-disable */
 /**
- * Generated `api` utility.
+ * Generated `ComponentApi` utility.
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
@@ -8,50 +8,21 @@
  * @module
  */
 
-import type * as example from "../example.js";
-import type * as loadTest from "../loadTest.js";
-import type * as playground from "../playground.js";
-
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
-
-declare const fullApi: ApiFromModules<{
-  example: typeof example;
-  loadTest: typeof loadTest;
-  playground: typeof playground;
-}>;
+import type { FunctionReference } from "convex/server";
 
 /**
- * A utility for referencing Convex functions in your app's public API.
+ * A utility for referencing a Convex component's exposed API.
  *
+ * Useful when expecting a parameter like `components.myComponent`.
  * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
+ * ```ts
+ * async function myFunction(ctx: QueryCtx, component: ComponentApi) {
+ *   return ctx.runQuery(component.someFile.someQuery, { ...args });
+ * }
  * ```
  */
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
-
-export declare const components: {
-  rateLimiter: {
+export type ComponentApi<Name extends string | undefined = string | undefined> =
+  {
     lib: {
       checkRateLimit: FunctionReference<
         "query",
@@ -82,15 +53,23 @@ export declare const components: {
           reserve?: boolean;
           throws?: boolean;
         },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        Name
       >;
       clearAll: FunctionReference<
         "mutation",
         "internal",
         { before?: number },
-        null
+        null,
+        Name
       >;
-      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getServerTime: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        number,
+        Name
+      >;
       getValue: FunctionReference<
         "query",
         "internal",
@@ -141,7 +120,8 @@ export declare const components: {
           shard: number;
           ts: number;
           value: number;
-        }
+        },
+        Name
       >;
       rateLimit: FunctionReference<
         "mutation",
@@ -172,17 +152,24 @@ export declare const components: {
           reserve?: boolean;
           throws?: boolean;
         },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        Name
       >;
       resetRateLimit: FunctionReference<
         "mutation",
         "internal",
         { key?: string; name: string },
-        null
+        null,
+        Name
       >;
     };
     time: {
-      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+      getServerTime: FunctionReference<
+        "mutation",
+        "internal",
+        {},
+        number,
+        Name
+      >;
     };
   };
-};
