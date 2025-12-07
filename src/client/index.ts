@@ -248,7 +248,7 @@ export class RateLimiter<
           if (typeof keyOrFn === "function") {
             key = await keyOrFn(ctx);
           } else {
-            key = keyOrFn;
+            key = keyOrFn ?? key;
           }
           return ctx.runQuery(this.component.lib.getValue, {
             ...rest,
