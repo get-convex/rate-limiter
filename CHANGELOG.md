@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Allow client-provided key for rate limiter hooks (credit: marcoshernanz)
+- Add consts for WEEK and DAY (credit: marwand)
+
 ## 0.3.0
 
 - Adds /test and /\_generated/component.js entrypoints
