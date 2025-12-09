@@ -240,15 +240,17 @@ export class RateLimiter<
         returns: getValueReturns,
         handler: async (ctx, args): Promise<GetValueReturns> => {
           const finalName = args.name ?? name;
-          let key = args.key;
           const { key: keyOrFn, ...rest } = options[0] ?? {};
-          if (key && keyOrFn) {
-            throw new Error("Cannot provide key in client args and hookAPI");
+          let key: string | undefined;
+          if (args.key && !keyOrFn) {
+            throw new Error(
+              "To allow client-provided key, provide a `key` function in the hook options.",
+            );
           }
           if (typeof keyOrFn === "function") {
-            key = await keyOrFn(ctx);
-          } else {
-            key = keyOrFn ?? key;
+            key = await keyOrFn(ctx, args.key);
+          } else if (keyOrFn !== undefined) {
+            key = keyOrFn;
           }
           return ctx.runQuery(this.component.lib.getValue, {
             ...rest,
@@ -322,6 +324,10 @@ type WithKnownNameOrInlinedConfig<
 type HookOpts<DataModel extends GenericDataModel> = {
   key?:
     | string
-    | ((ctx: GenericQueryCtx<DataModel>) => string | Promise<string>);
+    | ((
+        ctx: GenericQueryCtx<DataModel>,
+        // The key provided by the client, if any.
+        keyFromClient?: string,
+      ) => string | Promise<string>);
   sampleShards?: number;
 };

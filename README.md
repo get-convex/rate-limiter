@@ -204,8 +204,15 @@ First, define the server API to get the rate limit value:
 // In convex/example.ts
 export const { getRateLimit, getServerTime } = rateLimiter.hookAPI(
   "sendMessage",
-  // Optionally provide a key function to get the key for the rate limit
-  { key: async (ctx) => getUserId(ctx) },
+  {
+    // Optionally provide a key function to get the key for the rate limit
+    key: async (ctx) => await getUserId(ctx),
+    // To allow the client to provide the key, pass a function that takes the key from the client
+    key: async (ctx, keyFromClient) => {
+      await ensureUserCanUseKey(ctx, keyFromClient);
+      return keyFromClient;
+    },
+  },
 );
 ```
 
