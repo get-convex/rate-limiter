@@ -121,7 +121,7 @@ export function Monitor({
   }, []);
 
   // Draw timeline with smooth rendering
-  const drawTimeline = useCallback(() => {
+  const drawTimeline = useCallback(function drawTimeline() {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;

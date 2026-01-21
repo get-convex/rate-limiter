@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Monitor } from "./Monitor";
@@ -79,7 +79,13 @@ export const Playground = () => {
   }, [resetRateLimit]);
 
   // Calculate consumption stats
-  const now = Date.now();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
   const consumedLast10s = consumptionHistory
     .filter((event) => now - event.timestamp < 10000 && event.success)
     .reduce((sum, event) => sum + event.count, 0);
