@@ -95,11 +95,11 @@ export const Playground = () => {
     .reduce((sum, event) => sum + event.count, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-white">
       <div className="w-full max-w-7xl mx-auto p-6 space-y-8 animate-fade-in">
         {/* Header */}
         <div className="text-center space-y-4 py-8">
-          <h2 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
+          <h2 className="text-4xl font-bold bg-linear-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
             Rate Limiter Playground
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
@@ -224,7 +224,7 @@ export const Playground = () => {
             {/* Legend */}
             <div className="mt-6 flex flex-wrap gap-6 justify-center text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-0.5 bg-gradient-to-r from-primary-500 to-primary-700 rounded"></div>
+                <div className="w-4 h-0.5 bg-linear-to-r from-primary-500 to-primary-700 rounded"></div>
                 <span className="text-gray-700 font-medium">
                   Available tokens
                 </span>
@@ -253,7 +253,7 @@ export const Playground = () => {
             <div className="mt-6 flex flex-wrap justify-center gap-4">
               <button
                 onClick={() => handleConsume(1)}
-                className="px-8 py-4 bg-gradient-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-primary-600 hover:to-primary-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
+                className="px-8 py-4 bg-linear-to-r from-primary-500 to-primary-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-primary-600 hover:to-primary-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
               >
                 <div className="w-5 h-5 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
                   <span className="text-xs font-bold">1</span>
@@ -263,7 +263,7 @@ export const Playground = () => {
 
               <button
                 onClick={() => handleConsume(2)}
-                className="px-8 py-4 bg-gradient-to-r from-success-500 to-success-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-success-600 hover:to-success-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
+                className="px-8 py-4 bg-linear-to-r from-success-500 to-success-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-success-600 hover:to-success-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
               >
                 <div className="w-5 h-5 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
                   <span className="text-xs font-bold">2</span>
@@ -273,7 +273,7 @@ export const Playground = () => {
 
               <button
                 onClick={handleReset}
-                className="px-8 py-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-gray-600 hover:to-gray-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
+                className="px-8 py-4 bg-linear-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-gray-600 hover:to-gray-700 transform hover:scale-105 transition-all duration-200 flex items-center gap-3"
               >
                 <div className="w-5 h-5 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
                   <span className="text-xs font-bold">↻</span>
@@ -309,7 +309,7 @@ export const Playground = () => {
         </div>
 
         {/* How It Works */}
-        <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-200 p-8 animate-slide-up">
+        <div className="bg-linear-to-br from-gray-50 to-white rounded-2xl border border-gray-200 p-8 animate-slide-up">
           <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
             <div className="w-3 h-3 bg-primary-500 rounded-full mr-3"></div>
             How Rate Limiting Works
