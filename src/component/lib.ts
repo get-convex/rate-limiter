@@ -22,7 +22,7 @@ export const rateLimit = mutation({
     const { status, updates } = await checkRateLimitOrThrow(ctx.db, args);
     for (const { value, ts, existing, shard } of updates) {
       if (existing) {
-        await ctx.db.patch(existing._id, { ts, value });
+        await ctx.db.patch("rateLimits", existing._id, { ts, value });
       } else {
         const { name, key: optionalKey } = args;
         const key = optionalKey;
@@ -111,7 +111,7 @@ export const resetRateLimit = mutation({
       .withIndex("name", (q) => q.eq("name", args.name).eq("key", args.key))
       .collect();
     for (const shard of allShards) {
-      await ctx.db.delete(shard._id);
+      await ctx.db.delete("rateLimits", shard._id);
     }
   },
 });
@@ -128,7 +128,7 @@ export const clearAll = mutation({
       .order("desc")
       .take(100);
     for (const m of results) {
-      await ctx.db.delete(m._id);
+      await ctx.db.delete("rateLimits", m._id);
     }
     if (results.length === 100) {
       await ctx.scheduler.runAfter(0, api.lib.clearAll, {
