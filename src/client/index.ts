@@ -1,9 +1,8 @@
 import {
   type Expand,
-  type FunctionArgs,
-  type FunctionReference,
-  type FunctionReturnType,
+  type GenericActionCtx,
   type GenericDataModel,
+  type GenericMutationCtx,
   type GenericQueryCtx,
   mutationGeneric,
   queryGeneric,
@@ -97,7 +96,7 @@ export class RateLimiter<
    * ```
    */
   async check<Name extends string = keyof Limits & string>(
-    ctx: RunQueryCtx,
+    ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
       ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
@@ -132,7 +131,7 @@ export class RateLimiter<
    * ```
    */
   async limit<Name extends string = keyof Limits & string>(
-    ctx: RunMutationCtx,
+    ctx: MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
       ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
@@ -155,7 +154,7 @@ export class RateLimiter<
    * If not, it will reset the rate limit for the shared value.
    */
   async reset<Name extends string = keyof Limits & string>(
-    { runMutation }: RunMutationCtx,
+    { runMutation }: MutationCtx | ActionCtx,
     name: Name,
     args?: { key?: string },
   ): Promise<void> {
@@ -177,7 +176,7 @@ export class RateLimiter<
    * and the rate limit configuration.
    */
   async getValue<Name extends string = keyof Limits & string>(
-    ctx: RunQueryCtx,
+    ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
       ? [
@@ -292,18 +291,15 @@ export default RateLimiter;
 
 // Type utilities
 
-export type RunQueryCtx = {
-  runQuery: <Query extends FunctionReference<"query", "internal">>(
-    query: Query,
-    args: FunctionArgs<Query>,
-  ) => Promise<FunctionReturnType<Query>>;
-};
-export type RunMutationCtx = RunQueryCtx & {
-  runMutation: <Mutation extends FunctionReference<"mutation", "internal">>(
-    mutation: Mutation,
-    args: FunctionArgs<Mutation>,
-  ) => Promise<FunctionReturnType<Mutation>>;
-};
+export type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+export type MutationCtx = Pick<
+  GenericMutationCtx<GenericDataModel>,
+  "runQuery" | "runMutation"
+>;
+export type ActionCtx = Pick<
+  GenericActionCtx<GenericDataModel>,
+  "runQuery" | "runMutation" | "runAction"
+>;
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
   Name extends string,
