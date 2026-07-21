@@ -302,6 +302,46 @@ with more capacity, to keep them relatively balanced, based on the
 We will also combine the capacity of the two shards if neither has enough on
 their own.
 
+### Stale (batched) rate limiting for very high throughput
+
+Sharding spreads contention across many rows, but under extreme, sustained
+load even a single shard can be too hot to update transactionally on every
+request. For those cases you can opt into the eventually-consistent path by
+passing `stale: true` to `limit` / `check`:
+
+```ts
+const status = await rateLimiter.limit(ctx, "llmTokens", {
+  count: tokens,
+  stale: true,
+});
+```
+
+Instead of reading and writing the rate limit in the same transaction, the
+stale path:
+
+1. **Checks** the current value with a _snapshot query_ — it reads the shards
+   but does **not** register a read dependency, so it never causes an
+   optimistic-concurrency (OCC) conflict no matter how many requests race.
+2. If there's capacity, **enqueues** the proposed shard consumption with a
+   cheap insert-only mutation (also no reads, so no contention).
+
+A single background worker — the
+[Batch Worker component](https://github.com/get-convex/batch-worker) — drains
+the queue roughly every 500ms and applies all pending consumption to the rate
+limits in one pass, immediately continuing if there's more to drain. Because
+that worker is the **only** writer to each limit, there is no write contention
+regardless of request volume.
+
+The tradeoff is **eventual consistency**: the `ok` / `retryAfter` you get back
+reflects the latest _applied_ state, so a burst can briefly overshoot the limit
+before the queue is drained. Use this for high-throughput limits where a small,
+transient overshoot is acceptable and you'd otherwise be fighting OCC retries.
+
+Combine `stale` with `reserve: true` to enqueue the consumption even when the
+snapshot says the limit is already exceeded — useful when you'd rather always
+record the work and let the value go temporarily negative (delaying future
+grants) than drop it.
+
 ### Reserving capacity:
 
 You can also allow it to `reserve` capacity to avoid starvation on larger

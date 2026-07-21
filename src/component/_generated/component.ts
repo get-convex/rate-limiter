@@ -23,6 +23,77 @@ import type { FunctionReference } from "convex/server";
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
+    batched: {
+      check: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+        },
+        | {
+            ok: true;
+            retryAfter?: number;
+            updates: Array<{ count: number; shard: number }>;
+          }
+        | {
+            ok: false;
+            retryAfter: number;
+            updates: Array<{ count: number; shard: number }>;
+          },
+        Name
+      >;
+      push: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          key?: string;
+          name: string;
+          updates: Array<{ count: number; shard: number }>;
+        },
+        null,
+        Name
+      >;
+    };
     lib: {
       checkRateLimit: FunctionReference<
         "query",
