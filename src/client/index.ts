@@ -9,7 +9,6 @@ import {
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
-import { runSnapshotQuery } from "../future.js";
 import type {
   RateLimitArgs,
   RateLimitConfig,
@@ -64,14 +63,22 @@ async function staleLimit(
   component: ComponentApi,
   args: RateLimitArgs,
 ): Promise<RateLimitReturns> {
-  // The snapshot query reads the shards without a read dependency, so this
-  // never OCC-conflicts with the worker that's applying enqueued consumption.
-  const result = (await runSnapshotQuery(component.batched.check, {
+  const checkArgs = {
     name: args.name,
     key: args.key,
     count: args.count,
     config: args.config,
-  })) as StaleCheckResult;
+  };
+  // In a mutation, read against a stale snapshot so the check adds no read
+  // dependency and never OCC-conflicts with the worker applying enqueued
+  // consumption. In an action there's no read set, so a plain query (its own
+  // transaction) is already contention-free.
+  const result: StaleCheckResult =
+    "runAction" in ctx
+      ? await ctx.runQuery(component.batched.check, checkArgs)
+      : await ctx.runQuery(component.batched.check, checkArgs, {
+          useStaleSnapshot: true,
+        });
   if (result.ok || args.reserve) {
     await ctx.runMutation(component.batched.push, {
       name: args.name,
