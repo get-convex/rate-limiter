@@ -63,6 +63,36 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           },
         Name
       >;
+      credit: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+        },
+        { updates: Array<{ count: number; shard: number }> },
+        Name
+      >;
       push: FunctionReference<
         "mutation",
         "internal",

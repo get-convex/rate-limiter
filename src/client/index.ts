@@ -231,6 +231,59 @@ export class RateLimiter<
   }
 
   /**
+   * Credit tokens back to a rate limit, restoring capacity. This is the inverse
+   * of {@link limit}: instead of consuming tokens it returns them, filling the
+   * emptiest shards first and capping each shard at its capacity so a credit
+   * can never push a limit above its maximum.
+   *
+   * Use this to refund capacity when work that consumed the limit didn't
+   * actually happen (e.g. a request failed and you want to give the token back).
+   *
+   * @param ctx The ctx object from a mutation or action, including runMutation.
+   * @param name The name of the rate limit.
+   * @param options The credit arguments. `config` is required if the rate limit
+   * was not defined in {@link RateLimiter}. `count` is the number of tokens to
+   * restore (defaults to 1). `async: true` is currently required — the credit
+   * is enqueued for a background worker to apply, so it never contends on the
+   * limit. See {@link CreditArgs}.
+   */
+  async credit<Name extends string = keyof Limits & string>(
+    ctx: MutationCtx | ActionCtx,
+    name: Name,
+    ...options: Name extends keyof Limits & string
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, CreditArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, CreditArgs>]
+  ): Promise<void> {
+    const args = options[0];
+    const { async: isAsync, key, count } = args ?? {};
+    const config = this.getConfig(args, name);
+    if (!isAsync) {
+      throw new Error(
+        "credit currently only supports `{ async: true }`, which enqueues the " +
+          "credit to be applied by a background worker.",
+      );
+    }
+    const creditArgs = { name, key, count, config };
+    // As with a stale `limit`, read against a stale snapshot in a mutation so
+    // the check adds no read dependency; in an action a plain query already runs
+    // in its own contention-free transaction.
+    const result =
+      "runAction" in ctx
+        ? await ctx.runQuery(this.component.batched.credit, creditArgs)
+        : await ctx.runQuery(this.component.batched.credit, creditArgs, {
+            useStaleSnapshot: true,
+          });
+    if (result.updates.length > 0) {
+      await ctx.runMutation(this.component.batched.push, {
+        name,
+        key,
+        updates: result.updates,
+        config,
+      });
+    }
+  }
+
+  /**
    * Reset a rate limit. This will remove the rate limit from the database.
    * The next request will start fresh.
    * Note: In the case of a fixed window without a specified `start`,
@@ -420,6 +473,30 @@ export type ClientRateLimitArgs = RateLimitArgs & {
    * snapshot says the limit is exceeded.
    */
   stale?: boolean;
+};
+
+/**
+ * Arguments accepted by {@link RateLimiter.credit}.
+ */
+export type CreditArgs = {
+  /** The name of the rate limit. */
+  name: string;
+  /** The key to use for the rate limit. If not provided, the rate limit is a
+   * single shared value. */
+  key?: string;
+  /** The number of tokens to restore. Defaults to 1. Any amount that would push
+   * a shard above its capacity is discarded (the value is capped at the limit).
+   */
+  count?: number;
+  /** The rate limit configuration, if specified inline. */
+  config?: RateLimitConfig;
+  /**
+   * Enqueue the credit for a background worker to apply, rather than applying
+   * it inline. Currently required (only `true` is supported): the credit is
+   * checked against a stale snapshot and applied asynchronously, so it never
+   * contends on the limit.
+   */
+  async?: boolean;
 };
 
 type ShardConsumption = {
