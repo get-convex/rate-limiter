@@ -173,6 +173,54 @@ export const check = query({
 });
 
 /**
+ * Snapshot query for the lazy `credit` API. It restores capacity by adding
+ * tokens back to the limit, filling the *lowest*-value shards first (the mirror
+ * of `check`, which consumes from the highest) and never letting a shard exceed
+ * its capacity. Returns the shard writes to enqueue as negative consumption;
+ * the caller runs this against a stale snapshot to avoid OCC read dependencies.
+ */
+export const credit = query({
+  args: {
+    name: v.string(),
+    key: v.optional(v.string()),
+    count: v.optional(v.number()),
+    config: configValidator,
+  },
+  returns: v.object({ updates: v.array(vShardConsumption) }),
+  handler: async (ctx, args) => {
+    const config = configWithDefaults(args.config);
+    const shardConfig = configForShard(config);
+    const max = shardConfig.capacity ?? shardConfig.rate;
+    const docs = await ctx.db
+      .query("rateLimits")
+      .withIndex("name", (q) => q.eq("name", args.name).eq("key", args.key))
+      .collect();
+    const docsByShard = new Map(docs.map((doc) => [doc.shard, doc]));
+    const now = Date.now();
+    const shards = Array.from({ length: config.shards }, (_, shard) => {
+      const existing = docsByShard.get(shard) ?? null;
+      const current = calculateRateLimit(existing, shardConfig, now);
+      return { shard, value: current.value };
+    }).sort((a, b) => a.value - b.value || a.shard - b.shard);
+
+    // Hand the credit to the emptiest shards first, capping each at capacity so
+    // a restore can never push a shard above its limit. Spill to the next shard
+    // when one fills up. Credit is enqueued as negative consumption.
+    let remaining = args.count ?? 1;
+    const updates: { shard: number; count: number }[] = [];
+    for (const { shard, value } of shards) {
+      if (remaining <= 0) break;
+      const room = max - value;
+      if (room <= 0) continue;
+      const give = Math.min(room, remaining);
+      updates.push({ shard, count: -give });
+      remaining -= give;
+    }
+    return { updates };
+  },
+});
+
+/**
  * Work query: hand the next batch of queued consumption to the worker, or go
  * idle when the queue is empty. Uses a snapshot read, so concurrent `push`
  * inserts don't cause the loop to retry.
@@ -249,8 +297,13 @@ export const applyBatch = internalMutation({
       const config = configForShard(configWithDefaults(rawConfig));
       const existing = await getShard(ctx.db, name, key, shard);
       // Apply unconditionally — the snapshot check already gated admission. The
-      // value may go negative, which fairly delays future grants.
-      const { value, ts } = calculateRateLimit(existing, config, now, count);
+      // value may go negative, which fairly delays future grants. A net credit
+      // (negative count) restores capacity, so clamp at the limit to keep a
+      // shard from exceeding its capacity.
+      const max = config.capacity ?? config.rate;
+      const applied = calculateRateLimit(existing, config, now, count);
+      const value = Math.min(applied.value, max);
+      const ts = applied.ts;
       if (existing) {
         await ctx.db.patch("rateLimits", existing._id, { value, ts });
       } else {

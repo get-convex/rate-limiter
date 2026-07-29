@@ -179,6 +179,25 @@ await rateLimiter.limit(ctx, "failedLogins", { key: userId, throws: true });
 const status = await rateLimiter.check(ctx, "failedLogins", { key: userId });
 ```
 
+### Credit capacity back to a rate limit
+
+If work that consumed a rate limit didn't end up happening (e.g. a request
+failed), you can credit the tokens back to restore capacity. This is the inverse
+of `limit`: it fills the emptiest shards first and caps each shard at its
+capacity, so a credit can never push a limit above its maximum.
+
+```ts
+// Give back the token(s) that were consumed for a request that failed.
+await rateLimiter.credit(ctx, "sendMessage", { key: userId, async: true });
+
+// Credit a custom count.
+await rateLimiter.credit(ctx, "llmTokens", { count: tokens, async: true });
+```
+
+`async: true` is currently required: the credit is checked against a stale
+snapshot and applied by a background worker (the same batched path used by
+`stale` limiting), so it never contends on the limit.
+
 ### Reset a rate limit
 
 ```ts
