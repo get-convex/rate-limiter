@@ -271,7 +271,7 @@ Not to worry! To provide high throughput, we can use a technique called
 "sharding" where we break up the total capacity into individual buckets, or
 "shards". When we go to use some of that capacity, we check a random
 shard.<sup>[1](#power-of-two)</sup> While sometimes we'll get unlucky and get
-rate limited when there was capacity elsewhere, we'll never voilate the rate
+rate limited when there was capacity elsewhere, we'll never violate the rate
 limit's upper bound.
 
 ```ts
@@ -360,8 +360,8 @@ const retryAfter = status.retryAfter + Math.random() * period;
 
 For the fixed window, we also introduce randomness by picking the start time of
 the window (from which all subsequent windows are based) randomly if
-config.start wasn't provided. This helps from all clients flooding requests at
-midnight and paging you.
+config.start wasn't provided. This helps prevent all clients from flooding 
+requests at midnight and paging you.
 
 ## More resources
 
