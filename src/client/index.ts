@@ -32,36 +32,18 @@ export const DAY = 24 * HOUR;
 export const WEEK = 7 * DAY;
 
 /**
- * Read the current value of a rate limit against a stale snapshot, without
- * consuming. Backs {@link RateLimiter.check} when `stale` is set.
+ * Shared implementation of the `stale` (eventually-consistent) path for
+ * {@link RateLimiter.check} and {@link RateLimiter.limit}. It reads the current
+ * value against a stale snapshot — adding no read dependency, so it never
+ * OCC-conflicts with the worker applying enqueued consumption — and then, when
+ * `enqueue` is set (the `limit` case), hands the consumption to that worker if
+ * there's capacity, or unconditionally when `reserve` is set.
  */
-async function staleCheck(
+async function staleRateLimit(
   ctx: QueryCtx | MutationCtx | ActionCtx,
   component: ComponentApi,
   args: RateLimitArgs,
-): Promise<RateLimitReturns> {
-  const result = await ctx.runQuery(component.batched.check, {
-    name: args.name,
-    key: args.key,
-    count: args.count,
-    config: args.config,
-  });
-  if (!result.ok && args.throws) {
-    throwRateLimitError(args.name, result.retryAfter);
-  }
-  return rateLimitStatus(result);
-}
-
-/**
- * Consume a rate limit without contending on it: admit against a stale
- * snapshot, then hand the consumption to a background worker to apply. Backs
- * {@link RateLimiter.limit} when `stale` is set. With `reserve`, the
- * consumption is enqueued even when the snapshot says the limit is exceeded.
- */
-async function staleLimit(
-  ctx: MutationCtx | ActionCtx,
-  component: ComponentApi,
-  args: RateLimitArgs,
+  enqueue: boolean,
 ): Promise<RateLimitReturns> {
   const checkArgs = {
     name: args.name,
@@ -69,18 +51,24 @@ async function staleLimit(
     count: args.count,
     config: args.config,
   };
-  // In a mutation, read against a stale snapshot so the check adds no read
-  // dependency and never OCC-conflicts with the worker applying enqueued
-  // consumption. In an action there's no read set, so a plain query (its own
-  // transaction) is already contention-free.
+  // `useStaleSnapshot` only applies inside a mutation: it throws in a query,
+  // and in an action each `runQuery` is already its own transaction (no read
+  // set to keep out of). Ask Convex which we're in.
+  const { type } = await ctx.meta.getFunctionMetadata();
   const result: StaleCheckResult =
-    "runAction" in ctx
-      ? await ctx.runQuery(component.batched.check, checkArgs)
-      : await ctx.runQuery(component.batched.check, checkArgs, {
-          useStaleSnapshot: true,
-        });
-  if (result.ok || args.reserve) {
-    await ctx.runMutation(component.batched.push, {
+    type === "mutation"
+      ? await (ctx as MutationCtx).runQuery(
+          component.batched.check,
+          checkArgs,
+          {
+            useStaleSnapshot: true,
+          },
+        )
+      : await ctx.runQuery(component.batched.check, checkArgs);
+  if (enqueue && (result.ok || args.reserve)) {
+    // Only `limit` enqueues, and only from a mutation/action ctx (which have
+    // `runMutation`); `check` passes `enqueue: false`.
+    await (ctx as MutationCtx | ActionCtx).runMutation(component.batched.push, {
       name: args.name,
       key: args.key,
       updates: result.updates,
@@ -172,7 +160,12 @@ export class RateLimiter<
     const { stale, ...rest } = args ?? {};
     const config = this.getConfig(args, name);
     if (stale) {
-      return staleCheck(ctx, this.component, { ...rest, name, config });
+      return staleRateLimit(
+        ctx,
+        this.component,
+        { ...rest, name, config },
+        false,
+      );
     }
     return ctx.runQuery(this.component.lib.checkRateLimit, {
       ...rest,
@@ -221,7 +214,12 @@ export class RateLimiter<
     const { stale, ...rest } = args ?? {};
     const config = this.getConfig(args, name);
     if (stale) {
-      return staleLimit(ctx, this.component, { ...rest, name, config });
+      return staleRateLimit(
+        ctx,
+        this.component,
+        { ...rest, name, config },
+        true,
+      );
     }
     return ctx.runMutation(this.component.lib.rateLimit, {
       ...rest,
@@ -378,14 +376,17 @@ export default RateLimiter;
 
 // Type utilities
 
-export type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+export type QueryCtx = Pick<
+  GenericQueryCtx<GenericDataModel>,
+  "runQuery" | "meta"
+>;
 export type MutationCtx = Pick<
   GenericMutationCtx<GenericDataModel>,
-  "runQuery" | "runMutation"
+  "runQuery" | "runMutation" | "meta"
 >;
 export type ActionCtx = Pick<
   GenericActionCtx<GenericDataModel>,
-  "runQuery" | "runMutation" | "runAction"
+  "runQuery" | "runMutation" | "runAction" | "meta"
 >;
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
