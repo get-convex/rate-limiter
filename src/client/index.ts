@@ -31,6 +31,56 @@ export const HOUR = 60 * MINUTE;
 export const DAY = 24 * HOUR;
 export const WEEK = 7 * DAY;
 
+/**
+ * Shared implementation of the `stale` (eventually-consistent) path for
+ * {@link RateLimiter.check} and {@link RateLimiter.limit}. It reads the current
+ * value against a stale snapshot — adding no read dependency, so it never
+ * OCC-conflicts with the worker applying enqueued consumption — and then, when
+ * `enqueue` is set (the `limit` case), hands the consumption to that worker if
+ * there's capacity, or unconditionally when `reserve` is set.
+ */
+async function staleRateLimit(
+  ctx: QueryCtx | MutationCtx | ActionCtx,
+  component: ComponentApi,
+  args: RateLimitArgs,
+  enqueue: boolean,
+): Promise<RateLimitReturns> {
+  const checkArgs = {
+    name: args.name,
+    key: args.key,
+    count: args.count,
+    config: args.config,
+  };
+  // `useStaleSnapshot` only applies inside a mutation: it throws in a query,
+  // and in an action each `runQuery` is already its own transaction (no read
+  // set to keep out of). Ask Convex which we're in.
+  const { type } = await ctx.meta.getFunctionMetadata();
+  const result: StaleCheckResult =
+    type === "mutation"
+      ? await (ctx as MutationCtx).runQuery(
+          component.batched.check,
+          checkArgs,
+          {
+            useStaleSnapshot: true,
+          },
+        )
+      : await ctx.runQuery(component.batched.check, checkArgs);
+  if (enqueue && (result.ok || args.reserve)) {
+    // Only `limit` enqueues, and only from a mutation/action ctx (which have
+    // `runMutation`); `check` passes `enqueue: false`.
+    await (ctx as MutationCtx | ActionCtx).runMutation(component.batched.push, {
+      name: args.name,
+      key: args.key,
+      updates: result.updates,
+      config: args.config,
+    });
+  }
+  if (!result.ok && args.throws) {
+    throwRateLimitError(args.name, result.retryAfter);
+  }
+  return rateLimitStatus(result);
+}
+
 export function isRateLimitError(
   error: unknown,
 ): error is { data: RateLimitError } {
@@ -94,18 +144,33 @@ export class RateLimiter<
    * if (status.retryAfter) {
    *   await ctx.scheduler.runAfter(retryAfter, ...)
    * ```
+   *
+   * Pass `stale: true` to read the value against a stale snapshot (no read
+   * dependency, so no OCC contention) — the eventually-consistent counterpart
+   * to {@link limit} with `stale`.
    */
   async check<Name extends string = keyof Limits & string>(
     ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
-      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, ClientRateLimitArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, ClientRateLimitArgs>]
   ): Promise<RateLimitReturns> {
+    const args = options[0];
+    const { stale, ...rest } = args ?? {};
+    const config = this.getConfig(args, name);
+    if (stale) {
+      return staleRateLimit(
+        ctx,
+        this.component,
+        { ...rest, name, config },
+        false,
+      );
+    }
     return ctx.runQuery(this.component.lib.checkRateLimit, {
-      ...options[0],
+      ...rest,
       name,
-      config: this.getConfig(options[0], name),
+      config,
     });
   }
 
@@ -129,20 +194,40 @@ export class RateLimiter<
    * if (status.retryAfter) {
    *   await ctx.scheduler.runAfter(retryAfter, ...)
    * ```
+   *
+   * Pass `stale: true` to use the eventually-consistent path: the limit is
+   * checked against a stale snapshot (with no read dependency, so it never
+   * causes OCC contention) and, if there's capacity, the consumption is
+   * enqueued for a background worker to apply. This trades strict consistency
+   * for throughput — a burst can briefly overshoot the limit before the queue
+   * drains. With `stale`, `reserve: true` enqueues the consumption even when
+   * the snapshot says the limit is already exceeded.
    */
   async limit<Name extends string = keyof Limits & string>(
     ctx: MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
-      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, ClientRateLimitArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, ClientRateLimitArgs>]
   ): Promise<RateLimitReturns> {
+    const args = options[0];
+    const { stale, ...rest } = args ?? {};
+    const config = this.getConfig(args, name);
+    if (stale) {
+      return staleRateLimit(
+        ctx,
+        this.component,
+        { ...rest, name, config },
+        true,
+      );
+    }
     return ctx.runMutation(this.component.lib.rateLimit, {
-      ...options[0],
+      ...rest,
       name,
-      config: this.getConfig(options[0], name),
+      config,
     });
   }
+
   /**
    * Reset a rate limit. This will remove the rate limit from the database.
    * The next request will start fresh.
@@ -291,31 +376,78 @@ export default RateLimiter;
 
 // Type utilities
 
-export type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+export type QueryCtx = Pick<
+  GenericQueryCtx<GenericDataModel>,
+  "runQuery" | "meta"
+>;
 export type MutationCtx = Pick<
   GenericMutationCtx<GenericDataModel>,
-  "runQuery" | "runMutation"
+  "runQuery" | "runMutation" | "meta"
 >;
 export type ActionCtx = Pick<
   GenericActionCtx<GenericDataModel>,
-  "runQuery" | "runMutation" | "runAction"
+  "runQuery" | "runMutation" | "runAction" | "meta"
 >;
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
   Name extends string,
   Args,
 > = Expand<
-  Omit<Args, "name" | "config"> &
-    (Name extends keyof Limits
-      ? object
-      : {
-          /**  The rate limit configuration, if specified inline.
-           * If you use {@link RateLimits} to define the named rate limit, you don't
-           * specify the config inline.}
-           */
-          config: RateLimitConfig;
-        })
+  Args extends unknown
+    ? Omit<Args, "name" | "config"> &
+        (Name extends keyof Limits
+          ? object
+          : {
+              /**  The rate limit configuration, if specified inline.
+               * If you use {@link RateLimits} to define the named rate limit, you don't
+               * specify the config inline.}
+               */
+              config: RateLimitConfig;
+            })
+    : never
 >;
+
+/**
+ * Arguments accepted by {@link RateLimiter.limit} and {@link RateLimiter.check}.
+ * Same as {@link RateLimitArgs}, plus the `stale` flag that opts into the
+ * eventually-consistent (batched) path.
+ */
+export type ClientRateLimitArgs = RateLimitArgs & {
+  /**
+   * Use the eventually-consistent path: check the limit against a stale
+   * snapshot (no read dependency, so no OCC contention) and enqueue the
+   * consumption for a background worker to apply. Trades strict consistency
+   * for throughput. With `reserve`, consumption is enqueued even when the
+   * snapshot says the limit is exceeded.
+   */
+  stale?: boolean;
+};
+
+type ShardConsumption = {
+  shard: number;
+  count: number;
+};
+
+// The shard writes that `component.batched.check` proposes for this request,
+// alongside the pass/fail status. The client enqueues these when it decides to
+// consume (always when `ok`; also when `reserve` even if the limit is exceeded).
+type StaleCheckResult = RateLimitReturns & {
+  updates: ShardConsumption[];
+};
+
+function rateLimitStatus(result: StaleCheckResult): RateLimitReturns {
+  return result.ok
+    ? { ok: true, retryAfter: result.retryAfter }
+    : { ok: false, retryAfter: result.retryAfter };
+}
+
+function throwRateLimitError(name: string, retryAfter: number): never {
+  throw new ConvexError({
+    kind: "RateLimited",
+    name,
+    retryAfter,
+  } satisfies RateLimitError);
+}
 
 type HookOpts<DataModel extends GenericDataModel> = {
   key?:
