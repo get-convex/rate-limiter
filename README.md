@@ -357,8 +357,12 @@ consistent, so it can admit slightly more than its rate for a moment:
 - Several `limit` calls on the same limit _within one mutation_ all read the
   same snapshot, which doesn't include the calls before them. Consume once per
   mutation with a `count`, rather than calling it in a loop.
-- A read sums at most 256 queued updates for one limit. Past that it
-  under-counts, which for any realistic capacity is already far past rejecting.
+- A read walks at most 1024 queued updates for one limit. It normally stops far
+  sooner — as soon as the queue passes what the limit could grant — so the bound
+  only bites when a limit's capacity is larger than its queue is deep: many
+  small consumptions against a big budget. Past it, a read under-counts and
+  admits more than it should. Consuming once per mutation with a larger `count`
+  keeps the queue short.
 
 If you need a limit that can never be exceeded, even briefly, use shards
 instead.

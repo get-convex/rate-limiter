@@ -7,6 +7,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
 import {
   calculateRateLimit,
   configValidator,
@@ -26,11 +27,13 @@ export const WORKER_NAME = "rateLimitUpdates";
 const BATCH_SIZE = 64;
 
 /**
- * How many queued updates a single read of a lazy limit sums up. Reaching this
- * bound means the limit already has at least this many tokens of consumption in
- * flight, which for any realistic capacity is enough to reject on its own.
+ * The most queued updates a single read of a lazy limit will walk. Reads
+ * normally stop long before this, as soon as the queue exceeds what the limit
+ * could grant; this only bites when a limit's capacity is larger than the
+ * number of queued rows, i.e. many small consumptions against a big budget.
+ * Past it a read under-counts, and admits more than it should.
  */
-const MAX_PENDING_SCAN = 256;
+const MAX_PENDING_SCAN = 1024;
 
 /** Make sure the loop that applies queued updates is running. */
 export async function pingWorker(ctx: MutationCtx) {
@@ -44,27 +47,45 @@ export async function pingWorker(ctx: MutationCtx) {
 /**
  * The tokens consumed for one limit that the worker hasn't applied yet.
  *
- * Bounded by the worker's cursor so it doesn't have to scan past the updates
- * already applied and deleted.
+ * Bounded by the worker's cursor, so it doesn't scan past updates already
+ * applied and deleted, and it stops reading once the queue passes `ceiling` —
+ * the most the limit could ever hand out — since beyond that the caller rejects
+ * either way and more precision buys nothing.
  */
 export async function queuedCount(
   ctx: QueryCtx,
   name: string,
   key: string | undefined,
+  ceiling: number,
 ): Promise<number> {
   const cursor = (await ctx.runQuery(components.batchWorker.lib.getCursor, {
     name: WORKER_NAME,
   })) as bigint | null;
-  const queued = await ctx.db
+  let total = 0;
+  let scanned = 0;
+  // Iterating reads lazily, so a limit whose queue blows past the ceiling costs
+  // a couple of documents rather than the whole scan.
+  for await (const update of ctx.db
     .query("pendingUpdates")
     .withIndex("name_key_updatedAt", (q) =>
       q
         .eq("name", name)
         .eq("key", key)
         .gt("updatedAt", cursor ?? 0n),
-    )
-    .take(MAX_PENDING_SCAN);
-  return queued.reduce((total, update) => total + update.count, 0);
+    )) {
+    total += update.count;
+    scanned++;
+    if (total > ceiling || scanned >= MAX_PENDING_SCAN) break;
+  }
+  return total;
+}
+
+/** The most a single request could ever be granted from a limit. */
+export function grantCeiling(config: {
+  capacity: number;
+  maxReserved?: number;
+}): number {
+  return config.capacity + (config.maxReserved ?? 0);
 }
 
 const { vQueryArgs, vQueryReturns, vMutationArgs, vMutationReturns } =
@@ -147,26 +168,34 @@ export const applyBatch = internalMutation({
         key: string | undefined;
         count: number;
         config: RateLimitConfigValue;
+        ids: Id<"pendingUpdates">[];
       }
     >();
     for (const update of updates) {
+      // `resetRateLimit` and `clearAll` can drop rows out from under a batch
+      // that's already been handed out. Skip those: applying them would charge
+      // consumption to a limit that was just reset, and deleting them below
+      // would throw and wedge the loop until the monitor restarts it.
+      if ((await ctx.db.get("pendingUpdates", update.id)) === null) continue;
       const id = JSON.stringify([update.name, update.key ?? null]);
       const group = byLimit.get(id);
       if (group) {
         group.count += update.count;
         // Configs for one limit are expected to match; the newest wins.
         group.config = update.config;
+        group.ids.push(update.id);
       } else {
         byLimit.set(id, {
           name: update.name,
           key: update.key,
           count: update.count,
           config: update.config,
+          ids: [update.id],
         });
       }
     }
     const now = Date.now();
-    for (const { name, key, count, config } of byLimit.values()) {
+    for (const { name, key, count, config, ids } of byLimit.values()) {
       const existing = await getShard(ctx.db, name, key, SINGLETON_SHARD);
       const { value, ts } = calculateRateLimit(
         existing,
@@ -185,10 +214,12 @@ export const applyBatch = internalMutation({
           ts,
         });
       }
-    }
-    // The worker owns cleanup: whatever we don't delete comes back next batch.
-    for (const update of updates) {
-      await ctx.db.delete("pendingUpdates", update.id);
+      // The worker owns cleanup: whatever we don't delete comes back next
+      // batch. Deleting alongside the write keeps the two in step, so a
+      // limit is never charged without its rows going away.
+      for (const id of ids) {
+        await ctx.db.delete("pendingUpdates", id);
+      }
     }
     // Returning null re-runs immediately to drain the rest.
     return null;

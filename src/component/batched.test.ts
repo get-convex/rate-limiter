@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api.js";
+import { api, internal } from "./_generated/api.js";
 import { initConvexTest } from "./setup.test.js";
 import type { RateLimitConfigValue, RateLimitError } from "../shared.js";
 import { isRateLimitError } from "../client/index.js";
@@ -295,6 +295,97 @@ describe("lazy rate limits, independent of kind", () => {
     expect((await t.query(api.batched.check, { name, config })).ok).toBe(false);
 
     vi.advanceTimersByTime(Minute);
+    expect((await t.query(api.batched.check, { name, config })).ok).toBe(true);
+  });
+});
+
+describe("queue accounting edge cases", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("a big capacity consumed in small amounts isn't under-counted", async () => {
+    const t = initConvexTest();
+    const name = "manySmall";
+    const config = {
+      kind: "token bucket",
+      rate: 10_000,
+      period: Minute,
+      lazy: true,
+    } as RateLimitConfigValue;
+
+    // More queued rows than a read used to look at, but nowhere near capacity,
+    // so the scan has to walk all of them to get the right answer.
+    for (let i = 0; i < 300; i++) {
+      await t.mutation(api.batched.limit, { name, config });
+    }
+    expect((await t.query(api.lib.getValue, { name, config })).value).toBe(
+      10_000 - 300,
+    );
+
+    // The worker walks all 300 across several batches. (Their effect on the
+    // stored value isn't assertable here: draining jumps the fake clock minutes
+    // per batch, which refills a bucket this size between them.)
+    await drainWorker(t);
+    expect(
+      await t.run((ctx) => ctx.db.query("pendingUpdates").collect()),
+    ).toHaveLength(0);
+  });
+
+  test("a queue far past the limit still rejects", async () => {
+    const t = initConvexTest();
+    const name = "wayOver";
+    const config = {
+      kind: "token bucket",
+      rate: 10,
+      period: Minute,
+      lazy: true,
+    } as RateLimitConfigValue;
+
+    for (let i = 0; i < 5; i++) {
+      await t.mutation(api.batched.limit, {
+        name,
+        count: 10,
+        reserve: true,
+        config,
+      });
+    }
+    // The scan stops early once the queue passes what the limit could grant,
+    // but the answer it needs — "no capacity" — is unaffected.
+    expect((await t.query(api.batched.check, { name, config })).ok).toBe(false);
+  });
+
+  test("resetting mid-batch doesn't charge the reset limit or wedge the loop", async () => {
+    const t = initConvexTest();
+    const name = "resetRace";
+    const config = {
+      kind: "token bucket",
+      rate: 10,
+      period: Minute,
+      lazy: true,
+    } as RateLimitConfigValue;
+
+    await t.mutation(api.batched.limit, { name, count: 8, config });
+
+    // Hand out a batch the way the worker's loop does, then reset underneath it
+    // before it gets applied.
+    const batch = await t.query(internal.worker.getBatch, {
+      name: "rateLimitUpdates",
+    });
+    expect(batch.kind).toBe("work");
+    await t.mutation(api.lib.resetRateLimit, { name });
+
+    // Applying the stale batch must not throw on the vanished rows...
+    await t.mutation(internal.worker.applyBatch, {
+      updates: batch.kind === "work" ? batch.batch.updates : [],
+    });
+    // ...nor charge consumption to the limit that was just reset.
+    expect(await t.run((ctx) => ctx.db.query("rateLimits").collect())).toEqual(
+      [],
+    );
     expect((await t.query(api.batched.check, { name, config })).ok).toBe(true);
   });
 });

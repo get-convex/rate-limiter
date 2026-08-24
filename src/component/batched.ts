@@ -16,7 +16,7 @@ import {
   throwIfRateLimited,
   validateRequest,
 } from "./internal.js";
-import { pingWorker, queuedCount } from "./worker.js";
+import { grantCeiling, pingWorker, queuedCount } from "./worker.js";
 
 /**
  * Check a lazy rate limit without consuming anything.
@@ -85,7 +85,12 @@ async function staleCheck(
     );
   }
   const existing = await getShard(ctx.db, args.name, args.key, SINGLETON_SHARD);
-  const queued = await queuedCount(ctx, args.name, args.key);
+  const queued = await queuedCount(
+    ctx,
+    args.name,
+    args.key,
+    grantCeiling(config),
+  );
   const { status } = _checkRateLimitInternal(
     existing,
     config,

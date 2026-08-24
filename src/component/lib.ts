@@ -13,7 +13,7 @@ import {
   configWithDefaults,
   getShard,
 } from "./internal.js";
-import { queuedCount } from "./worker.js";
+import { grantCeiling, queuedCount } from "./worker.js";
 import { api } from "./_generated/api.js";
 
 /** How many rows one cleanup pass deletes before rescheduling itself. */
@@ -98,7 +98,7 @@ export const getValue = query({
     // stored value so callers project forward from the same number the next
     // check would see.
     const queued = config.lazy
-      ? await queuedCount(ctx, args.name, args.key)
+      ? await queuedCount(ctx, args.name, args.key, grantCeiling(config))
       : 0;
 
     return {
@@ -162,17 +162,18 @@ export const clearAll = mutation({
     for (const update of queued) {
       await ctx.db.delete("pendingUpdates", update._id);
     }
-    // Only a full page means there's more of that table left to walk.
-    const next = Math.min(
-      results.length === CLEANUP_BATCH
-        ? results[CLEANUP_BATCH - 1]._creationTime
-        : Infinity,
-      queued.length === CLEANUP_BATCH
-        ? queued[CLEANUP_BATCH - 1]._creationTime
-        : Infinity,
-    );
-    if (next !== Infinity) {
-      await ctx.scheduler.runAfter(0, api.lib.clearAll, { before: next });
+    // Only a full page means there's more of that table left to walk; a short
+    // one is exhausted and doesn't constrain where the next pass starts. Take
+    // the *newest* remaining cutoff: a lower one would skip everything the
+    // other table still has above it.
+    const cutoffs = [
+      results.length === CLEANUP_BATCH ? results[CLEANUP_BATCH - 1] : undefined,
+      queued.length === CLEANUP_BATCH ? queued[CLEANUP_BATCH - 1] : undefined,
+    ].filter((doc) => doc !== undefined);
+    if (cutoffs.length > 0) {
+      await ctx.scheduler.runAfter(0, api.lib.clearAll, {
+        before: Math.max(...cutoffs.map((doc) => doc._creationTime)),
+      });
     }
   },
 });
