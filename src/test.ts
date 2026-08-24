@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import type { TestConvex } from "convex-test";
 import type { GenericSchema, SchemaDefinition } from "convex/server";
+import batchWorker from "@convex-dev/batch-worker/test";
 import schema from "./component/schema.js";
 const modules = import.meta.glob("./component/**/*.ts");
 
@@ -14,5 +15,7 @@ export function register(
   name: string = "rateLimiter",
 ) {
   t.registerComponent(name, schema, modules);
+  // Lazy rate limits are applied by a batch worker mounted inside us.
+  batchWorker.register(t, `${name}/batchWorker`);
 }
 export default { register, schema, modules };

@@ -16,6 +16,9 @@ export const loadTestRateLimiter = internalAction({
     rate: v.optional(v.number()),
     period: v.optional(v.number()),
     shards: v.optional(v.number()),
+    // Consume in the background instead of sharding. `occFailures` in the
+    // result is what this is here to drive to zero.
+    lazy: v.optional(v.boolean()),
     capacity: v.optional(v.number()),
     overRequest: v.optional(v.number()),
     shardCapacity: v.optional(v.number()),
@@ -38,13 +41,10 @@ export const loadTestRateLimiter = internalAction({
     const qpsPerWorker = args.qpsPerWorker ?? 5;
     const numWorkers = Math.ceil(qps / qpsPerWorker);
     const workerPeriod = SECOND / ((qps * overRequest) / numWorkers);
-    const config: RateLimitConfig = {
-      kind: args.strategy ?? "token bucket",
-      rate,
-      period,
-      shards,
-      capacity,
-    };
+    const kind = args.strategy ?? "token bucket";
+    const config: RateLimitConfig = args.lazy
+      ? { kind, rate, period, capacity, lazy: true }
+      : { kind, rate, period, capacity, shards };
 
     await rateLimiter.reset(ctx, "llmRequests");
     const start = Date.now() + period;
@@ -105,7 +105,7 @@ export const loadTestRateLimiter = internalAction({
       rateLimited,
       rateLimitedRate: (rateLimited / total).toFixed(4),
       numWorkers,
-      capacityPerShard: capacity / shards,
+      capacityPerShard: args.lazy ? capacity : capacity / shards,
       workerPeriod,
       config,
       qpms: {

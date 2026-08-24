@@ -5,7 +5,7 @@ import {
   calculateRateLimit,
   type GetValueArgs,
   type GetValueReturns,
-  type RateLimitConfig,
+  type RateLimitConfigValue,
 } from "../shared.js";
 
 export type UseRateLimitOptions = {
@@ -14,7 +14,7 @@ export type UseRateLimitOptions = {
   count?: number;
   sampleShards?: number;
   getServerTimeMutation?: GetServerTimeMutation;
-  config?: RateLimitConfig;
+  config?: RateLimitConfigValue;
 };
 
 export type GetRateLimitValueQuery = FunctionReference<

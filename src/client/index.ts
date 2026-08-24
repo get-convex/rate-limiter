@@ -14,16 +14,21 @@ import type {
   RateLimitConfig,
   RateLimitError,
   RateLimitReturns,
+  RateLimitConfigValue,
   GetValueReturns,
+  StaleCheckResult,
 } from "../shared.js";
 import { getValueArgs, getValueReturns } from "../shared.js";
 export { calculateRateLimit } from "../shared.js";
 export type {
   RateLimitArgs,
   RateLimitConfig,
+  RateLimitConfigValue,
   RateLimitError,
   RateLimitReturns,
+  StaleCheckResult,
 };
+export type { FixedWindowConfig, TokenBucketConfig } from "../shared.js";
 
 export const SECOND = 1000;
 export const MINUTE = 60 * SECOND;
@@ -68,10 +73,14 @@ export function isRateLimitError(
 export class RateLimiter<
   Limits extends Record<string, RateLimitConfig> = Record<never, never>,
 > {
+  public limits?: Limits;
+
   constructor(
     public component: ComponentApi,
-    public limits?: Limits,
-  ) {}
+    limits?: Limits & ValidatedLimits<Limits>,
+  ) {
+    this.limits = limits;
+  }
 
   /**
    * Check a rate limit.
@@ -102,11 +111,23 @@ export class RateLimiter<
       ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
       : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
   ): Promise<RateLimitReturns> {
-    return ctx.runQuery(this.component.lib.checkRateLimit, {
-      ...options[0],
-      name,
-      config: this.getConfig(options[0], name),
-    });
+    const config = this.getConfig(options[0], name);
+    const args = { ...options[0], name, config };
+    if (!config.lazy) {
+      return ctx.runQuery(this.component.lib.checkRateLimit, args);
+    }
+    // From a mutation, read the limit off a recent snapshot so checking it
+    // doesn't make this transaction conflict with everyone else consuming it.
+    const { type } = await ctx.meta.getFunctionMetadata();
+    const result: StaleCheckResult =
+      type === "mutation"
+        ? await (ctx as MutationCtx).runQuery(
+            this.component.batched.check,
+            args,
+            { useStaleSnapshot: true },
+          )
+        : await ctx.runQuery(this.component.batched.check, args);
+    return result;
   }
 
   /**
@@ -137,11 +158,12 @@ export class RateLimiter<
       ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
       : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
   ): Promise<RateLimitReturns> {
-    return ctx.runMutation(this.component.lib.rateLimit, {
-      ...options[0],
-      name,
-      config: this.getConfig(options[0], name),
-    });
+    const config = this.getConfig(options[0], name);
+    const args = { ...options[0], name, config };
+    return ctx.runMutation(
+      config.lazy ? this.component.batched.limit : this.component.lib.rateLimit,
+      args,
+    );
   }
   /**
    * Reset a rate limit. This will remove the rate limit from the database.
@@ -273,7 +295,7 @@ export class RateLimiter<
   private getConfig<Name extends string, Args>(
     args: WithKnownNameOrInlinedConfig<Limits, Name, Args> | undefined,
     name: Name,
-  ): RateLimitConfig {
+  ): RateLimitConfigValue {
     const config =
       (args && "config" in args && args.config) ||
       (this.limits && this.limits[name]);
@@ -291,14 +313,17 @@ export default RateLimiter;
 
 // Type utilities
 
-export type QueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+export type QueryCtx = Pick<
+  GenericQueryCtx<GenericDataModel>,
+  "runQuery" | "meta"
+>;
 export type MutationCtx = Pick<
   GenericMutationCtx<GenericDataModel>,
-  "runQuery" | "runMutation"
+  "runQuery" | "runMutation" | "meta"
 >;
 export type ActionCtx = Pick<
   GenericActionCtx<GenericDataModel>,
-  "runQuery" | "runMutation" | "runAction"
+  "runQuery" | "runMutation" | "runAction" | "meta"
 >;
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
@@ -312,10 +337,27 @@ type WithKnownNameOrInlinedConfig<
           /**  The rate limit configuration, if specified inline.
            * If you use {@link RateLimits} to define the named rate limit, you don't
            * specify the config inline.}
+           *
+           * An inline config is the loose {@link RateLimitConfigValue} shape, so
+           * one that came in over the wire can be passed straight through. That
+           * means `lazy` and `shards` aren't kept apart at the type level here
+           * the way they are for limits defined on the {@link RateLimiter} —
+           * setting both throws at runtime.
            */
-          config: RateLimitConfig;
+          config: RateLimitConfigValue;
         })
 >;
+
+/**
+ * Rejects a limit that asks for both `lazy` and `shards`. A lazy limit is
+ * applied by a single batch worker, so sharding it would only fragment its
+ * capacity between documents nothing else writes to.
+ */
+type ValidatedLimits<Limits extends Record<string, RateLimitConfig>> = {
+  [Name in keyof Limits]: Limits[Name] extends { lazy: true; shards: number }
+    ? "A lazy rate limit can't be sharded: the batch worker is its only writer"
+    : Limits[Name];
+};
 
 type HookOpts<DataModel extends GenericDataModel> = {
   key?:

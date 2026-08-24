@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 import {
   calculateRateLimit,
   type RateLimitArgs,
-  type RateLimitConfig,
+  type RateLimitConfigValue,
   type RateLimitError,
   type RateLimitReturns,
 } from "../shared.js";
@@ -18,14 +18,21 @@ export async function checkRateLimitOrThrow(
   args: RateLimitArgs,
 ) {
   const result = await checkRateLimitSharded(db, args);
-  if (result.status.retryAfter && args.throws) {
+  throwIfRateLimited(args, result.status);
+  return result;
+}
+
+export function throwIfRateLimited(
+  args: RateLimitArgs,
+  status: RateLimitReturns,
+) {
+  if (status.retryAfter && args.throws) {
     throw new ConvexError({
       kind: "RateLimited",
       name: args.name,
-      retryAfter: result.status.retryAfter,
+      retryAfter: status.retryAfter,
     } satisfies RateLimitError);
   }
-  return result;
 }
 
 async function checkRateLimitSharded(
@@ -127,16 +134,23 @@ async function checkRateLimitSharded(
   return { status: { ok, retryAfter }, updates };
 }
 
-export function configWithDefaults(config: RateLimitConfig) {
+export function configWithDefaults(config: RateLimitConfigValue) {
+  if (config.lazy && config.shards !== undefined && config.shards !== 1) {
+    throw new Error(
+      "A lazy rate limit can't be sharded: the batch worker is its only writer.",
+    );
+  }
   return {
     ...config,
-    shards: Math.round(config.shards || 1),
+    // A lazy limit is applied by one worker, so extra shards only fragment its
+    // capacity.
+    shards: config.lazy ? 1 : Math.round(config.shards || 1),
     capacity: config.capacity ?? config.rate,
   };
 }
 
 // Sanity check that this could ever be satisfied
-function validateRequest(args: RateLimitArgs) {
+export function validateRequest(args: RateLimitArgs) {
   const config = configWithDefaults(args.config);
   const { shards, capacity } = config;
   if (shards <= 0) {
@@ -193,7 +207,7 @@ export async function getShard(
     .unique();
 }
 
-function shardConfig(config: RateLimitConfig, shards: number) {
+function shardConfig(config: RateLimitConfigValue, shards: number) {
   if (shards === 1) return config;
   const sharded = { ...config };
   sharded.rate /= shards;
@@ -209,7 +223,7 @@ function shardConfig(config: RateLimitConfig, shards: number) {
 // exported for testing only
 export function _checkRateLimitInternal(
   existing: { value: number; ts: number } | null,
-  config: RateLimitConfig,
+  config: RateLimitConfigValue,
   count: number = 1,
   reserve: boolean = false,
 ) {

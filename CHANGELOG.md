@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Adds `lazy` rate limits, which check a recent database snapshot and queue
+  their consumption for a batch worker to apply, so any number of concurrent
+  requests can share one limit without OCC conflicts. Reads (`limit`, `check`,
+  `getValue`) subtract the queued consumption, so bursts stay bounded. `lazy`
+  and `shards` are mutually exclusive, enforced by the types.
+- Requires `convex@^1.43.0` (for `v.commitTs()` and stale snapshot reads), and
+  depends on the [batch worker](https://github.com/get-convex/batch-worker)
+  component.
+- `RateLimiter`'s ctx types now include `meta`, used to detect whether `check`
+  is running inside a mutation.
+- Inline `config` arguments accept the looser `RateLimitConfigValue` shape, so a
+  config that arrived over the wire can be passed straight through.
+
 ## 0.3.2
 
 - Pass client-provided keys to the key function, don't trust them by default.

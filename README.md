@@ -45,7 +45,8 @@ rare), but will serve most real-world use cases.
 - Type-safe usage: you won't accidentally misspell a rate limit name.
 - Configurable for fixed window or token bucket algorithms.
 - Efficient storage and compute: storage is not proportional to requests.
-- Configurable sharding for scalability.
+- Configurable sharding for scalability, or `lazy` limits that consume in the
+  background for unbounded write throughput.
 - Transactional evaluation: all rate limit changes will roll back if your
   mutation fails.
 - Fairness guarantees via credit "reservation": save yourself from exponential
@@ -104,6 +105,9 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Use sharding to increase throughput without compromising on correctness.
   llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, shards: 10 },
   llmRequests: { kind: "fixed window", rate: 1000, period: MINUTE, shards: 10 },
+  // Or make it `lazy` to consume in the background, with no write contention
+  // at all. See "Scaling past sharding with lazy rate limits" below.
+  llmCalls: { kind: "token bucket", rate: 40000, period: MINUTE, lazy: true },
 });
 ```
 
@@ -301,6 +305,63 @@ with more capacity, to keep them relatively balanced, based on the
 [power of two technique](https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf).
 We will also combine the capacity of the two shards if neither has enough on
 their own.
+
+### Scaling past sharding with lazy rate limits
+
+Sharding raises the ceiling but doesn't remove it: every request still writes to
+a shard document synchronously, so a hot enough limit eventually contends again.
+Mark a limit `lazy` and it stops writing on the request path entirely:
+
+```ts
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  // Any number of concurrent requests can consume this without conflicting.
+  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, lazy: true },
+});
+
+const status = await rateLimiter.limit(ctx, "llmTokens", { count: tokens });
+```
+
+`limit` on a lazy limit does two conflict-free things: it reads the limit from a
+recent database snapshot (which takes no read dependency, so it never conflicts
+with anyone else consuming it), and it appends the consumption to a queue. A
+[batch worker](https://github.com/get-convex/batch-worker) folds the queue into
+the limit in batches, summing everything for one limit into a single write. It
+runs one loop at a time, so those documents have exactly one writer no matter
+how fast requests arrive.
+
+Reads account for what's still queued, so a burst is bounded rather than waved
+through: `limit`, `check`, and `getValue` all subtract the queued consumption
+from the stored value. Sharding is unnecessary for a lazy limit — the worker is
+its only writer — and the types won't let you ask for both:
+
+```ts
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  // Type error: a lazy rate limit can't be sharded.
+  llmTokens: {
+    kind: "token bucket",
+    rate: 40000,
+    period: MINUTE,
+    lazy: true,
+    shards: 10,
+  },
+});
+```
+
+What you give up is exactness at the edges. A lazy limit is eventually
+consistent, so it can admit slightly more than its rate for a moment:
+
+- Requests that commit within the same instant can't see each other's
+  consumption, so a truly simultaneous burst can overshoot. The debt is real —
+  the value goes negative and requests are rejected until it's paid back — so
+  the rate holds over any window longer than that instant.
+- Several `limit` calls on the same limit _within one mutation_ all read the
+  same snapshot, which doesn't include the calls before them. Consume once per
+  mutation with a `count`, rather than calling it in a loop.
+- A read sums at most 256 queued updates for one limit. Past that it
+  under-counts, which for any realistic capacity is already far past rejecting.
+
+If you need a limit that can never be exceeded, even briefly, use shards
+instead.
 
 ### Reserving capacity:
 

@@ -23,8 +23,8 @@ import type { FunctionReference } from "convex/server";
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
-    lib: {
-      checkRateLimit: FunctionReference<
+    batched: {
+      check: FunctionReference<
         "query",
         "internal",
         {
@@ -32,6 +32,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "token bucket";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -41,6 +42,77 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "fixed window";
+                lazy?: boolean;
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        Name
+      >;
+      limit: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                lazy?: boolean;
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                lazy?: boolean;
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count?: number;
+          key?: string;
+          name: string;
+          reserve?: boolean;
+          throws?: boolean;
+        },
+        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        Name
+      >;
+    };
+    lib: {
+      checkRateLimit: FunctionReference<
+        "query",
+        "internal",
+        {
+          config:
+            | {
+                capacity?: number;
+                kind: "token bucket";
+                lazy?: boolean;
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                capacity?: number;
+                kind: "fixed window";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -78,6 +150,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "token bucket";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -87,6 +160,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "fixed window";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -102,6 +176,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "token bucket";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -111,6 +186,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "fixed window";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -131,6 +207,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "token bucket";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;
@@ -140,6 +217,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             | {
                 capacity?: number;
                 kind: "fixed window";
+                lazy?: boolean;
                 maxReserved?: number;
                 period: number;
                 rate: number;

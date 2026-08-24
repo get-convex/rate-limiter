@@ -1,6 +1,18 @@
 import type { Infer } from "convex/values";
 import { v } from "convex/values";
 
+/** The shard that lazy rate limits read and write. */
+export const SINGLETON_SHARD = 0;
+
+const commonConfigFields = {
+  rate: v.number(),
+  period: v.number(),
+  capacity: v.optional(v.number()),
+  maxReserved: v.optional(v.number()),
+  shards: v.optional(v.number()),
+  lazy: v.optional(v.boolean()),
+};
+
 /**
  * A token bucket limits the rate of requests by continuously adding tokens to
  * be consumed when servicing requests.
@@ -11,11 +23,7 @@ import { v } from "convex/values";
  */
 export const tokenBucketValidator = v.object({
   kind: v.literal("token bucket"),
-  rate: v.number(),
-  period: v.number(),
-  capacity: v.optional(v.number()),
-  maxReserved: v.optional(v.number()),
-  shards: v.optional(v.number()),
+  ...commonConfigFields,
   start: v.optional(v.null()),
 });
 
@@ -29,11 +37,7 @@ export const tokenBucketValidator = v.object({
  */
 export const fixedWindowValidator = v.object({
   kind: v.literal("fixed window"),
-  rate: v.number(),
-  period: v.number(),
-  capacity: v.optional(v.number()),
-  maxReserved: v.optional(v.number()),
-  shards: v.optional(v.number()),
+  ...commonConfigFields,
   start: v.optional(v.number()),
 });
 
@@ -43,13 +47,69 @@ export const configValidator = v.union(
 );
 
 /**
+ * The over-the-wire shape of a rate limit config: every field the validators
+ * accept, without the type-level rules that keep `shards` and `lazy` apart.
+ * Component internals work with this; app code should use
+ * {@link RateLimitConfig}.
+ */
+export type RateLimitConfigValue = Infer<typeof configValidator>;
+
+type CommonConfigFields = {
+  /** Tokens added per `period`. */
+  rate: number;
+  /** The duration, in ms, that `rate` tokens are added over. */
+  period: number;
+  /** The maximum number of tokens that can accumulate. Defaults to `rate`. */
+  capacity?: number;
+  /** The maximum number of tokens that can be reserved ahead of time. */
+  maxReserved?: number;
+  /**
+   * Spread the limit over this many documents so more requests can consume it
+   * at once. Each request reads a couple of shards, so the capacity a single
+   * request can draw on is `capacity / (shards / 2)`.
+   *
+   * Mutually exclusive with `lazy`: a lazy limit has one writer, so extra
+   * shards would only fragment its capacity.
+   */
+  shards?: number;
+  /**
+   * Consume the limit asynchronously: each request checks a recent snapshot and
+   * queues its consumption for a background worker to fold in, in batches. Any
+   * number of concurrent requests can then share one limit without write
+   * conflicts, at the cost of a check that can lag slightly behind reality.
+   *
+   * Mutually exclusive with `shards`.
+   */
+  lazy?: true;
+};
+
+// Collapses an intersection into a single object type, so `RateLimitConfig`
+// stays a two-member union that discriminates cleanly on `kind`.
+type Flatten<T> = T extends object ? { [K in keyof T]: T[K] } : never;
+
+/** A token bucket rate limit. See {@link tokenBucketValidator}. */
+export type TokenBucketConfig = Flatten<
+  {
+    kind: "token bucket";
+    start?: null;
+  } & CommonConfigFields
+>;
+
+/** A fixed window rate limit. See {@link fixedWindowValidator}. */
+export type FixedWindowConfig = Flatten<
+  {
+    kind: "fixed window";
+    /** What the windows are relative to, in utc time. Random if unset. */
+    start?: number;
+  } & CommonConfigFields
+>;
+
+/**
  * One of the supported rate limits.
  * See {@link tokenBucketValidator} and {@link fixedWindowValidator} for more
  * information.
  */
-export type RateLimitConfig =
-  | Infer<typeof tokenBucketValidator>
-  | Infer<typeof fixedWindowValidator>;
+export type RateLimitConfig = TokenBucketConfig | FixedWindowConfig;
 
 /**
  * Arguments for rate limiting.
@@ -89,7 +149,7 @@ export type RateLimitArgs = {
    */
   throws?: boolean;
   /** The rate limit configuration. See {@link RateLimitConfig}. */
-  config: RateLimitConfig;
+  config: RateLimitConfigValue;
 };
 
 export const rateLimitReturns = v.union(
@@ -105,6 +165,16 @@ export const rateLimitReturns = v.union(
 );
 
 export type RateLimitReturns = Infer<typeof rateLimitReturns>;
+
+/**
+ * The result of checking a lazy rate limit. Structurally the same as
+ * {@link RateLimitReturns}, but computed from a recent snapshot plus the
+ * updates still queued for the background worker, so it can lag behind
+ * consumption that hasn't committed yet.
+ */
+export const staleCheckReturns = rateLimitReturns;
+
+export type StaleCheckResult = RateLimitReturns;
 
 export type RateLimitError = {
   kind: "RateLimited";
@@ -136,7 +206,7 @@ export type GetValueReturns = Infer<typeof getValueReturns>;
  */
 export function calculateRateLimit(
   existing: { value: number; ts: number } | null,
-  config: RateLimitConfig,
+  config: RateLimitConfigValue,
   now: number = Date.now(),
   count: number = 0,
 ) {
@@ -145,7 +215,7 @@ export function calculateRateLimit(
     value: max,
     ts:
       config.kind === "fixed window"
-        ? config.start ?? now - Math.floor(Math.random() * config.period)
+        ? (config.start ?? now - Math.floor(Math.random() * config.period))
         : now,
   };
 

@@ -8,9 +8,11 @@
  * @module
  */
 
+import type * as batched from "../batched.js";
 import type * as internal_ from "../internal.js";
 import type * as lib from "../lib.js";
 import type * as time from "../time.js";
+import type * as worker from "../worker.js";
 
 import type {
   ApiFromModules,
@@ -20,9 +22,11 @@ import type {
 import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
+  batched: typeof batched;
   internal: typeof internal_;
   lib: typeof lib;
   time: typeof time;
+  worker: typeof worker;
 }> = anyApi as any;
 
 /**
@@ -51,4 +55,6 @@ export const internal: FilterApi<
   FunctionReference<any, "internal">
 > = anyApi as any;
 
-export const components = componentsGeneric() as unknown as {};
+export const components = componentsGeneric() as unknown as {
+  batchWorker: import("@convex-dev/batch-worker/_generated/component.js").ComponentApi<"batchWorker">;
+};

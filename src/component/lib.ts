@@ -13,7 +13,11 @@ import {
   configWithDefaults,
   getShard,
 } from "./internal.js";
+import { queuedCount } from "./worker.js";
 import { api } from "./_generated/api.js";
+
+/** How many rows one cleanup pass deletes before rescheduling itself. */
+const CLEANUP_BATCH = 100;
 
 export const rateLimit = mutation({
   args: rateLimitArgs,
@@ -90,8 +94,15 @@ export const getValue = query({
       config.start = maxShard.maxTs.windowStart;
     }
 
+    // Consumption the worker hasn't applied yet is real: subtract it from the
+    // stored value so callers project forward from the same number the next
+    // check would see.
+    const queued = config.lazy
+      ? await queuedCount(ctx, args.name, args.key)
+      : 0;
+
     return {
-      value: maxShard.value,
+      value: maxShard.value - queued,
       ts: maxShard.ts,
       shard: maxShard.shard,
       config,
@@ -113,6 +124,20 @@ export const resetRateLimit = mutation({
     for (const shard of allShards) {
       await ctx.db.delete("rateLimits", shard._id);
     }
+    // Drop consumption the worker hasn't applied yet, so it doesn't land on the
+    // limit after it's been reset.
+    const queued = await ctx.db
+      .query("pendingUpdates")
+      .withIndex("name_key_updatedAt", (q) =>
+        q.eq("name", args.name).eq("key", args.key),
+      )
+      .take(CLEANUP_BATCH);
+    for (const update of queued) {
+      await ctx.db.delete("pendingUpdates", update._id);
+    }
+    if (queued.length === CLEANUP_BATCH) {
+      await ctx.scheduler.runAfter(0, api.lib.resetRateLimit, args);
+    }
   },
 });
 
@@ -120,20 +145,34 @@ export const clearAll = mutation({
   args: { before: v.optional(v.number()) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const before = args.before ?? Date.now();
     const results = await ctx.db
       .query("rateLimits")
-      .withIndex("by_creation_time", (q) =>
-        q.lte("_creationTime", args.before ?? Date.now()),
-      )
+      .withIndex("by_creation_time", (q) => q.lte("_creationTime", before))
       .order("desc")
-      .take(100);
+      .take(CLEANUP_BATCH);
     for (const m of results) {
       await ctx.db.delete("rateLimits", m._id);
     }
-    if (results.length === 100) {
-      await ctx.scheduler.runAfter(0, api.lib.clearAll, {
-        before: results[99]._creationTime,
-      });
+    const queued = await ctx.db
+      .query("pendingUpdates")
+      .withIndex("by_creation_time", (q) => q.lte("_creationTime", before))
+      .order("desc")
+      .take(CLEANUP_BATCH);
+    for (const update of queued) {
+      await ctx.db.delete("pendingUpdates", update._id);
+    }
+    // Only a full page means there's more of that table left to walk.
+    const next = Math.min(
+      results.length === CLEANUP_BATCH
+        ? results[CLEANUP_BATCH - 1]._creationTime
+        : Infinity,
+      queued.length === CLEANUP_BATCH
+        ? queued[CLEANUP_BATCH - 1]._creationTime
+        : Infinity,
+    );
+    if (next !== Infinity) {
+      await ctx.scheduler.runAfter(0, api.lib.clearAll, { before: next });
     }
   },
 });
