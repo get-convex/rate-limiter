@@ -18,9 +18,9 @@
 - Requires `convex@^1.43.0` (for `v.commitTs()` and stale snapshot reads), and
   depends on the [batch worker](https://github.com/get-convex/batch-worker)
   component.
-- `RateLimiter.check` now asks for `meta` on its ctx, to tell whether `stale`
-  can be honored. Every real ctx provides it; only a hand-narrowed ctx would
-  need updating.
+- `RateLimiter.check` asks for `meta` on its ctx only when `stale` is passed, so
+  existing calls — including those with a ctx narrowed to the exported
+  `QueryCtx`/`MutationCtx`/`ActionCtx` — are unaffected.
 
 ## 0.3.2
 

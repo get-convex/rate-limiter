@@ -308,9 +308,9 @@ their own.
 
 ### Scaling past sharding with async consumption
 
-Sharding raises the ceiling but doesn't remove it: every request still writes to
-a shard document synchronously, so a hot enough limit eventually contends again.
-Pass `async: true` and the call stops writing on the request path entirely:
+Sharding raises the ceiling but doesn't remove it: every request still updates a
+shard document synchronously, and requests that pick the same shard contend.
+Pass `async: true` and the request stops touching the limit at all:
 
 ```ts
 const status = await rateLimiter.limit(ctx, "llmTokens", {
@@ -319,9 +319,10 @@ const status = await rateLimiter.limit(ctx, "llmTokens", {
 });
 ```
 
-That does two conflict-free things: it reads the limit from a recent database
-snapshot (which takes no read dependency, so it never conflicts with anyone else
-consuming it), and it appends the consumption to a queue. A
+It still writes — it appends one row to a queue — but that's an insert of a new
+document rather than an update of a hot one, so concurrent callers have nothing
+to contend over. The read side is conflict-free too: the limit is read from a
+recent database snapshot, which takes no read dependency on it. A
 [batch worker](https://github.com/get-convex/batch-worker) folds the queue into
 the limit in batches, summing everything for one limit into a single write. It
 runs one loop at a time, so those documents have exactly one writer no matter

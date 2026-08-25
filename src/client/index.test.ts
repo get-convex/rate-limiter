@@ -3,6 +3,10 @@ import { ConvexError } from "convex/values";
 import {
   isRateLimitError,
   RateLimiter,
+  type ActionCtx,
+  type CtxMeta,
+  type MutationCtx,
+  type QueryCtx,
   type RateLimitConfig,
   type RateLimitError,
 } from "./index.js";
@@ -62,10 +66,38 @@ test("config and option types", () => {
     await rateLimiter.limit(null as never, "unknown", { async: true });
   }
 
+  // A ctx narrowed to the exported aliases still works for everything that
+  // doesn't need to know which kind of function it's in.
+  async function narrowedCtxs(
+    queryCtx: QueryCtx,
+    mutationCtx: MutationCtx,
+    actionCtx: ActionCtx,
+  ) {
+    await rateLimiter.check(queryCtx, "plain");
+    await rateLimiter.check(mutationCtx, "plain", { count: 2 });
+    await rateLimiter.check(actionCtx, "plain");
+    await rateLimiter.getValue(queryCtx, "plain", { stale: true });
+    await rateLimiter.limit(mutationCtx, "plain", { async: true });
+    await rateLimiter.reset(mutationCtx, "plain");
+
+    // ...but a stale check needs `meta`, so it can tell whether it's allowed.
+    // @ts-expect-error a narrowed ctx has no `meta`
+    await rateLimiter.check(queryCtx, "plain", { stale: true });
+  }
+
+  // A real ctx has `meta`, so a stale check is fine.
+  async function fullCtx(ctx: QueryCtx & CtxMeta) {
+    await rateLimiter.check(ctx, "plain", { stale: true });
+    // @ts-expect-error `stale` is still unavailable on a sharded limit
+    await rateLimiter.check(ctx, "sharded", { stale: true });
+  }
+
   // A config whose `kind` isn't narrowed to one literal still fits.
   const kind = "token bucket" as "token bucket" | "fixed window";
   const eitherKind: RateLimitConfig = { kind, rate: 1, period: 1000 };
 
   expect(calls).toBeInstanceOf(Function);
+  expect(narrowedCtxs).toBeInstanceOf(Function);
+  expect(fullCtx).toBeInstanceOf(Function);
   expect(eitherKind.rate).toBe(1);
 });

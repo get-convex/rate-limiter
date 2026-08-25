@@ -113,25 +113,39 @@ export class RateLimiter<
    *   await ctx.scheduler.runAfter(retryAfter, ...)
    * ```
    */
-  async check<Name extends string = keyof Limits & string>(
-    ctx: (QueryCtx | MutationCtx | ActionCtx) & CtxMeta,
+  // Without `stale`, any ctx will do — this is the signature it has always had.
+  check<Name extends string = keyof Limits & string>(
+    ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [CheckOptions<Limits, Name>?]
-      : [CheckOptions<Limits, Name>]
+      ? [SyncCheckOptions<Limits, Name>?]
+      : [SyncCheckOptions<Limits, Name>]
+  ): Promise<RateLimitReturns>;
+  // `stale` additionally needs `meta`, to tell whether it can be honored.
+  check<Name extends string = keyof Limits & string>(
+    ctx: (QueryCtx | MutationCtx | ActionCtx) & CtxMeta,
+    name: Name,
+    options: StaleCheckOptions<Limits, Name>,
+  ): Promise<RateLimitReturns>;
+  async check<Name extends string = keyof Limits & string>(
+    ctx: (QueryCtx | MutationCtx | ActionCtx) & Partial<CtxMeta>,
+    name: Name,
+    options?: { stale?: boolean },
   ): Promise<RateLimitReturns> {
-    const { stale, ...rest } = (options[0] ?? {}) as { stale?: boolean };
+    const { stale, ...rest } = options ?? {};
     const args = {
       ...rest,
       name,
-      config: this.getConfig(options[0], name, stale),
+      config: this.getConfig(options, name, stale),
     };
     if (!stale) {
       return ctx.runQuery(this.component.lib.checkRateLimit, args);
     }
     // Only a mutation may read a stale snapshot — a query ctx throws on the
     // option — so ask which one we're in rather than guessing from the shape.
-    const { type } = await ctx.meta.getFunctionMetadata();
+    // A ctx narrowed past `meta` can still get the right answer, just without
+    // the conflict-free read.
+    const type = await ctx.meta?.getFunctionMetadata().then((m) => m.type);
     const result: StaleCheckResult =
       type === "mutation"
         ? await (ctx as MutationCtx).runQuery(
@@ -393,12 +407,25 @@ type AsyncOption<
     : Partial<Record<Key, boolean>>
   : Partial<Record<Key, boolean>>;
 
-type CheckOptions<
+/** `check` options that don't ask for a stale read. */
+type SyncCheckOptions<
+  Limits extends Record<string, RateLimitConfig>,
+  Name extends string,
+> = Expand<
+  WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs> & {
+    stale?: false;
+  }
+>;
+
+/** `check` options that do. Only reachable for limits that allow it. */
+type StaleCheckOptions<
   Limits extends Record<string, RateLimitConfig>,
   Name extends string,
 > = Expand<
   WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs> &
-    AsyncOption<Limits, Name, "stale">
+    (AsyncOption<Limits, Name, "stale"> extends Partial<Record<"stale", never>>
+      ? { stale?: never }
+      : { stale: true })
 >;
 
 type LimitOptions<
