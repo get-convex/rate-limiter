@@ -45,8 +45,8 @@ rare), but will serve most real-world use cases.
 - Type-safe usage: you won't accidentally misspell a rate limit name.
 - Configurable for fixed window or token bucket algorithms.
 - Efficient storage and compute: storage is not proportional to requests.
-- Configurable sharding for scalability, or `lazy` limits that consume in the
-  background for unbounded write throughput.
+- Configurable sharding for scalability, or a `LazyRateLimiter` that consumes in
+  the background for unbounded write throughput.
 - Transactional evaluation: all rate limit changes will roll back if your
   mutation fails.
 - Fairness guarantees via credit "reservation": save yourself from exponential
@@ -105,9 +105,18 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Use sharding to increase throughput without compromising on correctness.
   llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, shards: 10 },
   llmRequests: { kind: "fixed window", rate: 1000, period: MINUTE, shards: 10 },
-  // Or make it `lazy` to consume in the background, with no write contention
-  // at all. See "Scaling past sharding with lazy rate limits" below.
-  llmCalls: { kind: "token bucket", rate: 40000, period: MINUTE, lazy: true },
+});
+```
+
+For limits hot enough that sharding isn't enough, define them on a
+`LazyRateLimiter` instead — see
+[below](#scaling-past-sharding-with-lazy-rate-limits).
+
+```ts
+import { LazyRateLimiter } from "@convex-dev/rate-limiter";
+
+const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter, {
+  llmCalls: { kind: "token bucket", rate: 40000, period: MINUTE },
 });
 ```
 
@@ -310,20 +319,23 @@ their own.
 
 Sharding raises the ceiling but doesn't remove it: every request still writes to
 a shard document synchronously, so a hot enough limit eventually contends again.
-Mark a limit `lazy` and it stops writing on the request path entirely:
+Define the limit on a `LazyRateLimiter` and it stops writing on the request path
+entirely:
 
 ```ts
-const rateLimiter = new RateLimiter(components.rateLimiter, {
+import { LazyRateLimiter, MINUTE } from "@convex-dev/rate-limiter";
+
+const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter, {
   // Any number of concurrent requests can consume this without conflicting.
-  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, lazy: true },
+  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE },
 });
 
-const status = await rateLimiter.limit(ctx, "llmTokens", { count: tokens });
+const status = await lazyRateLimiter.limit(ctx, "llmTokens", { count: tokens });
 ```
 
-`limit` on a lazy limit does two conflict-free things: it reads the limit from a
-recent database snapshot (which takes no read dependency, so it never conflicts
-with anyone else consuming it), and it appends the consumption to a queue. A
+`limit` here does two conflict-free things: it reads the limit from a recent
+database snapshot (which takes no read dependency, so it never conflicts with
+anyone else consuming it), and it appends the consumption to a queue. A
 [batch worker](https://github.com/get-convex/batch-worker) folds the queue into
 the limit in batches, summing everything for one limit into a single write. It
 runs one loop at a time, so those documents have exactly one writer no matter
@@ -331,21 +343,24 @@ how fast requests arrive.
 
 Reads account for what's still queued, so a burst is bounded rather than waved
 through: `limit`, `check`, and `getValue` all subtract the queued consumption
-from the stored value. Sharding is unnecessary for a lazy limit — the worker is
-its only writer — and the types won't let you ask for both:
+from the stored value.
+
+The API is otherwise the same as `RateLimiter` — `limit`, `check`, `getValue`,
+`reset`, and `hookAPI` all behave as documented above. The one option it doesn't
+take is `shards`: the worker is a lazy limit's only writer, so extra shards
+would just fragment its capacity. That's why the two are separate clients rather
+than a flag, and the types say so:
 
 ```ts
-const rateLimiter = new RateLimiter(components.rateLimiter, {
+new LazyRateLimiter(components.rateLimiter, {
   // Type error: a lazy rate limit can't be sharded.
-  llmTokens: {
-    kind: "token bucket",
-    rate: 40000,
-    period: MINUTE,
-    lazy: true,
-    shards: 10,
-  },
+  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, shards: 10 },
 });
 ```
+
+Limit names are shared between the two clients, since both address the same
+stored limits. Don't define the same name on both, or the synchronous and lazy
+paths will fight over one document.
 
 What you give up is exactness at the edges. A lazy limit is eventually
 consistent, so it can admit slightly more than its rate for a moment:
@@ -363,9 +378,12 @@ consistent, so it can admit slightly more than its rate for a moment:
   small consumptions against a big budget. Past it, a read under-counts and
   admits more than it should. Consuming once per mutation with a larger `count`
   keeps the queue short.
+- Reading a lazy limit's value accounts for the queue, so a reactive
+  `useRateLimit` subscription on one recomputes as consumption is enqueued, not
+  only as it's applied.
 
-If you need a limit that can never be exceeded, even briefly, use shards
-instead.
+If you need a limit that can never be exceeded, even briefly, use `RateLimiter`
+with shards instead.
 
 ### Reserving capacity:
 

@@ -1,5 +1,7 @@
 import {
+  LazyRateLimiter,
   RateLimiter,
+  type LazyRateLimitConfig,
   type RateLimitConfig,
   SECOND,
 } from "@convex-dev/rate-limiter";
@@ -8,6 +10,7 @@ import { internalAction } from "./_generated/server";
 import { components } from "./_generated/api";
 
 const rateLimiter = new RateLimiter(components.rateLimiter);
+const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter);
 
 export const loadTestRateLimiter = internalAction({
   args: {
@@ -42,9 +45,19 @@ export const loadTestRateLimiter = internalAction({
     const numWorkers = Math.ceil(qps / qpsPerWorker);
     const workerPeriod = SECOND / ((qps * overRequest) / numWorkers);
     const kind = args.strategy ?? "token bucket";
-    const config: RateLimitConfig = args.lazy
-      ? { kind, rate, period, capacity, lazy: true }
-      : { kind, rate, period, capacity, shards };
+    const lazyConfig: LazyRateLimitConfig = { kind, rate, period, capacity };
+    const shardedConfig: RateLimitConfig = {
+      kind,
+      rate,
+      period,
+      capacity,
+      shards,
+    };
+    const config = args.lazy ? lazyConfig : shardedConfig;
+    // Same limit name either way, so the two modes are directly comparable.
+    const consume = args.lazy
+      ? () => lazyRateLimiter.limit(ctx, "llmRequests", { config: lazyConfig })
+      : () => rateLimiter.limit(ctx, "llmRequests", { config: shardedConfig });
 
     await rateLimiter.reset(ctx, "llmRequests");
     const start = Date.now() + period;
@@ -68,11 +81,7 @@ export const loadTestRateLimiter = internalAction({
         await new Promise((resolve) => setTimeout(resolve, offset));
         while (Date.now() < end) {
           try {
-            const { ok, retryAfter } = await rateLimiter.limit(
-              ctx,
-              "llmRequests",
-              { config },
-            );
+            const { ok, retryAfter } = await consume();
             const after = Date.now();
             if (ok) {
               if (after > start && after < end) successes++;

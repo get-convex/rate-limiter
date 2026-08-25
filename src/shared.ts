@@ -48,9 +48,9 @@ export const configValidator = v.union(
 
 /**
  * The over-the-wire shape of a rate limit config: every field the validators
- * accept, without the type-level rules that keep `shards` and `lazy` apart.
- * Component internals work with this; app code should use
- * {@link RateLimitConfig}.
+ * accept, including the `lazy` flag the clients set for themselves. Component
+ * internals work with this; app code should use {@link RateLimitConfig} or
+ * {@link LazyRateLimitConfig}.
  */
 export type RateLimitConfigValue = Infer<typeof configValidator>;
 
@@ -63,53 +63,69 @@ type CommonConfigFields = {
   capacity?: number;
   /** The maximum number of tokens that can be reserved ahead of time. */
   maxReserved?: number;
-  /**
-   * Spread the limit over this many documents so more requests can consume it
-   * at once. Each request reads a couple of shards, so the capacity a single
-   * request can draw on is `capacity / (shards / 2)`.
-   *
-   * Mutually exclusive with `lazy`: a lazy limit has one writer, so extra
-   * shards would only fragment its capacity.
-   */
-  shards?: number;
-  /**
-   * Consume the limit asynchronously: each request checks a recent snapshot and
-   * queues its consumption for a background worker to fold in, in batches. Any
-   * number of concurrent requests can then share one limit without write
-   * conflicts, at the cost of a check that can lag slightly behind reality.
-   *
-   * Mutually exclusive with `shards`.
-   */
-  lazy?: true;
 };
 
-// Collapses an intersection into a single object type, so `RateLimitConfig`
-// stays a two-member union that discriminates cleanly on `kind`.
+type TokenBucketFields = {
+  kind: "token bucket";
+  start?: null;
+} & CommonConfigFields;
+
+type FixedWindowFields = {
+  kind: "fixed window";
+  /** What the windows are relative to, in utc time. Random if unset. */
+  start?: number;
+} & CommonConfigFields;
+
+// Collapses an intersection into a single object type. Each config type has to
+// stay a two-member union that discriminates on `kind`, or a config whose
+// `kind` isn't narrowed to one literal stops being assignable to it.
 type Flatten<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 
+/**
+ * How many documents to spread the limit over, so more requests can consume it
+ * at once. Each request reads a couple of shards, so the capacity a single
+ * request can draw on is `capacity / (shards / 2)`.
+ *
+ * This is the only difference between {@link RateLimitConfig} and
+ * {@link LazyRateLimitConfig}: keeping the two options on separate types is
+ * what stops them being combined, since a lazy limit has one writer and extra
+ * shards would only fragment its capacity.
+ */
+type ShardOption = { shards?: number };
+
 /** A token bucket rate limit. See {@link tokenBucketValidator}. */
-export type TokenBucketConfig = Flatten<
-  {
-    kind: "token bucket";
-    start?: null;
-  } & CommonConfigFields
->;
+export type TokenBucketConfig = Flatten<TokenBucketFields & ShardOption>;
 
 /** A fixed window rate limit. See {@link fixedWindowValidator}. */
-export type FixedWindowConfig = Flatten<
-  {
-    kind: "fixed window";
-    /** What the windows are relative to, in utc time. Random if unset. */
-    start?: number;
-  } & CommonConfigFields
->;
+export type FixedWindowConfig = Flatten<FixedWindowFields & ShardOption>;
 
 /**
- * One of the supported rate limits.
+ * One of the supported rate limits, consumed synchronously.
  * See {@link tokenBucketValidator} and {@link fixedWindowValidator} for more
  * information.
+ *
+ * For limits hot enough that the synchronous write becomes a bottleneck, see
+ * {@link LazyRateLimitConfig}.
  */
 export type RateLimitConfig = TokenBucketConfig | FixedWindowConfig;
+
+/** A lazily-consumed token bucket rate limit. */
+export type LazyTokenBucketConfig = Flatten<TokenBucketFields>;
+
+/** A lazily-consumed fixed window rate limit. */
+export type LazyFixedWindowConfig = Flatten<FixedWindowFields>;
+
+/**
+ * A rate limit consumed asynchronously, for use with `LazyRateLimiter`.
+ *
+ * Requests check a recent snapshot and queue their consumption for a batch
+ * worker to fold in, so any number of them can share one limit without write
+ * conflicts, at the cost of a check that can lag slightly behind reality.
+ *
+ * There is deliberately no `shards` option: the worker is the limit's only
+ * writer, so sharding it would only fragment its capacity.
+ */
+export type LazyRateLimitConfig = LazyTokenBucketConfig | LazyFixedWindowConfig;
 
 /**
  * Arguments for rate limiting.

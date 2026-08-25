@@ -1,16 +1,16 @@
-import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
+import { LazyRateLimiter, MINUTE } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
 import { components } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 
-// A `lazy` limit is checked against a recent snapshot and consumed in the
-// background, so any number of requests can share one limit without the write
-// conflicts you'd get from all of them updating the same document.
-const rateLimiter = new RateLimiter(components.rateLimiter, {
+// A LazyRateLimiter checks each limit against a recent snapshot and consumes it
+// in the background, so any number of requests can share one limit without the
+// write conflicts you'd get from all of them updating the same document.
+const rateLimiter = new LazyRateLimiter(components.rateLimiter, {
   // A global budget on an expensive shared resource, hit from everywhere.
-  llmTokens: { kind: "token bucket", rate: 10_000, period: MINUTE, lazy: true },
-  // Per-user, and still lazy: hot keys don't contend either.
-  search: { kind: "fixed window", rate: 60, period: MINUTE, lazy: true },
+  llmTokens: { kind: "token bucket", rate: 10_000, period: MINUTE },
+  // Per-user, and lazy here too: hot keys don't contend either.
+  search: { kind: "fixed window", rate: 60, period: MINUTE },
 });
 
 export const consumeTokens = mutation({
