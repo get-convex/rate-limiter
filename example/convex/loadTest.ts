@@ -1,7 +1,5 @@
 import {
-  LazyRateLimiter,
   RateLimiter,
-  type LazyRateLimitConfig,
   type RateLimitConfig,
   SECOND,
 } from "@convex-dev/rate-limiter";
@@ -10,7 +8,6 @@ import { internalAction } from "./_generated/server";
 import { components } from "./_generated/api";
 
 const rateLimiter = new RateLimiter(components.rateLimiter);
-const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter);
 
 export const loadTestRateLimiter = internalAction({
   args: {
@@ -22,6 +19,7 @@ export const loadTestRateLimiter = internalAction({
     // Consume in the background instead of sharding. `occFailures` in the
     // result is what this is here to drive to zero.
     lazy: v.optional(v.boolean()),
+
     capacity: v.optional(v.number()),
     overRequest: v.optional(v.number()),
     shardCapacity: v.optional(v.number()),
@@ -45,19 +43,13 @@ export const loadTestRateLimiter = internalAction({
     const numWorkers = Math.ceil(qps / qpsPerWorker);
     const workerPeriod = SECOND / ((qps * overRequest) / numWorkers);
     const kind = args.strategy ?? "token bucket";
-    const lazyConfig: LazyRateLimitConfig = { kind, rate, period, capacity };
-    const shardedConfig: RateLimitConfig = {
-      kind,
-      rate,
-      period,
-      capacity,
-      shards,
-    };
-    const config = args.lazy ? lazyConfig : shardedConfig;
-    // Same limit name either way, so the two modes are directly comparable.
-    const consume = args.lazy
-      ? () => lazyRateLimiter.limit(ctx, "llmRequests", { config: lazyConfig })
-      : () => rateLimiter.limit(ctx, "llmRequests", { config: shardedConfig });
+    // Asynchronous consumption applies to the singleton shard, so the two modes
+    // are compared unsharded vs. sharded. Same limit name either way.
+    const config: RateLimitConfig = args.lazy
+      ? { kind, rate, period, capacity }
+      : { kind, rate, period, capacity, shards };
+    const consume = () =>
+      rateLimiter.limit(ctx, "llmRequests", { config, async: args.lazy });
 
     await rateLimiter.reset(ctx, "llmRequests");
     const start = Date.now() + period;

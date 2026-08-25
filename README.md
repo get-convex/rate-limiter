@@ -45,8 +45,8 @@ rare), but will serve most real-world use cases.
 - Type-safe usage: you won't accidentally misspell a rate limit name.
 - Configurable for fixed window or token bucket algorithms.
 - Efficient storage and compute: storage is not proportional to requests.
-- Configurable sharding for scalability, or a `LazyRateLimiter` that consumes in
-  the background for unbounded write throughput.
+- Configurable sharding for scalability, or asynchronous consumption for
+  unbounded write throughput.
 - Transactional evaluation: all rate limit changes will roll back if your
   mutation fails.
 - Fairness guarantees via credit "reservation": save yourself from exponential
@@ -108,17 +108,8 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 });
 ```
 
-For limits hot enough that sharding isn't enough, define them on a
-`LazyRateLimiter` instead — see
-[below](#scaling-past-sharding-with-lazy-rate-limits).
-
-```ts
-import { LazyRateLimiter } from "@convex-dev/rate-limiter";
-
-const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter, {
-  llmCalls: { kind: "token bucket", rate: 40000, period: MINUTE },
-});
-```
+For limits hot enough that sharding isn't enough, consume them asynchronously —
+see [below](#scaling-past-sharding-with-async-consumption).
 
 - You can safely generate multiple instances if you want to define different
   rates in separate places, provided the keys don't overlap.
@@ -315,55 +306,71 @@ with more capacity, to keep them relatively balanced, based on the
 We will also combine the capacity of the two shards if neither has enough on
 their own.
 
-### Scaling past sharding with lazy rate limits
+### Scaling past sharding with async consumption
 
 Sharding raises the ceiling but doesn't remove it: every request still writes to
 a shard document synchronously, so a hot enough limit eventually contends again.
-Define the limit on a `LazyRateLimiter` and it stops writing on the request path
-entirely:
+Pass `async: true` and the call stops writing on the request path entirely:
 
 ```ts
-import { LazyRateLimiter, MINUTE } from "@convex-dev/rate-limiter";
-
-const lazyRateLimiter = new LazyRateLimiter(components.rateLimiter, {
-  // Any number of concurrent requests can consume this without conflicting.
-  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE },
+const status = await rateLimiter.limit(ctx, "llmTokens", {
+  count: tokens,
+  async: true,
 });
-
-const status = await lazyRateLimiter.limit(ctx, "llmTokens", { count: tokens });
 ```
 
-`limit` here does two conflict-free things: it reads the limit from a recent
-database snapshot (which takes no read dependency, so it never conflicts with
-anyone else consuming it), and it appends the consumption to a queue. A
+That does two conflict-free things: it reads the limit from a recent database
+snapshot (which takes no read dependency, so it never conflicts with anyone else
+consuming it), and it appends the consumption to a queue. A
 [batch worker](https://github.com/get-convex/batch-worker) folds the queue into
 the limit in batches, summing everything for one limit into a single write. It
 runs one loop at a time, so those documents have exactly one writer no matter
 how fast requests arrive.
 
-Reads account for what's still queued, so a burst is bounded rather than waved
-through: `limit`, `check`, and `getValue` all subtract the queued consumption
-from the stored value.
-
-The API is otherwise the same as `RateLimiter` — `limit`, `check`, `getValue`,
-`reset`, and `hookAPI` all behave as documented above. The one option it doesn't
-take is `shards`: the worker is a lazy limit's only writer, so extra shards
-would just fragment its capacity. That's why the two are separate clients rather
-than a flag, and the types say so:
+Reads of the limit need `stale: true` to match, which adds in the consumption
+that's queued but not yet applied:
 
 ```ts
-new LazyRateLimiter(components.rateLimiter, {
-  // Type error: a lazy rate limit can't be sharded.
-  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, shards: 10 },
+const status = await rateLimiter.check(ctx, "llmTokens", { stale: true });
+const { value } = await rateLimiter.getValue(ctx, "llmTokens", { stale: true });
+export const { getRateLimit } = rateLimiter.hookAPI("llmTokens", {
+  stale: true,
 });
 ```
 
-Limit names are shared between the two clients, since both address the same
-stored limits. Don't define the same name on both, or the synchronous and lazy
-paths will fight over one document.
+From a mutation, `stale` also means the check takes no read dependency on the
+limit, so checking one can't make the transaction conflict.
 
-What you give up is exactness at the edges. A lazy limit is eventually
-consistent, so it can admit slightly more than its rate for a moment:
+#### Use it consistently, per limit
+
+**These flags are per call, and nothing enforces that you use them
+consistently.** That's the one thing you have to get right yourself. A
+synchronous call doesn't see queued consumption and writes the same document the
+worker does, so mixing the two on one limit both over-admits and reintroduces
+the conflicts you were avoiding — likewise a `check` without `stale` will wave
+through a burst that has already used the limit up. Pick a mode per limit and
+use it everywhere.
+
+Sharding is redundant once you're async — the worker is the limit's only writer,
+and it only ever writes the singleton shard — so the two can't be combined, and
+for a limit defined on the client the types say so:
+
+```ts
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  llmRequests: { kind: "fixed window", rate: 1000, period: MINUTE, shards: 10 },
+});
+
+// Type error: `async` is not available on a sharded limit.
+await rateLimiter.limit(ctx, "llmRequests", { async: true });
+```
+
+With an inline `config` there's no named limit to check against, so that one
+throws at runtime instead.
+
+#### What you give up
+
+An asynchronously-consumed limit is eventually consistent, so it can admit
+slightly more than its rate for a moment:
 
 - Requests that commit within the same instant can't see each other's
   consumption, so a truly simultaneous burst can overshoot. The debt is real —
@@ -378,12 +385,11 @@ consistent, so it can admit slightly more than its rate for a moment:
   small consumptions against a big budget. Past it, a read under-counts and
   admits more than it should. Consuming once per mutation with a larger `count`
   keeps the queue short.
-- Reading a lazy limit's value accounts for the queue, so a reactive
-  `useRateLimit` subscription on one recomputes as consumption is enqueued, not
-  only as it's applied.
+- A `stale` read accounts for the queue, so a subscribed `useRateLimit`
+  recomputes as consumption is enqueued, not only as it's applied.
 
-If you need a limit that can never be exceeded, even briefly, use `RateLimiter`
-with shards instead.
+If you need a limit that can never be exceeded, even briefly, leave `async` off
+and use shards instead.
 
 ### Reserving capacity:
 

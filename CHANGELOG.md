@@ -2,18 +2,25 @@
 
 ## Unreleased
 
-- Adds `LazyRateLimiter`, a client whose limits are checked against a recent
-  database snapshot and consumed by a batch worker in the background, so any
-  number of concurrent requests can share one limit without OCC conflicts. Reads
-  (`limit`, `check`, `getValue`) subtract consumption the worker hasn't applied
-  yet, so bursts stay bounded.
-- A lazy limit takes no `shards`: the worker is its only writer. Keeping the two
-  on separate clients is what lets the types enforce that.
+- Adds asynchronous consumption: `limit(ctx, name, { async: true })` checks the
+  limit against a recent database snapshot and queues the consumption for a
+  batch worker to fold in, so any number of concurrent requests can share one
+  limit without OCC conflicts.
+- `check` and `getValue` take a matching `stale: true`, which adds in
+  consumption the worker hasn't applied yet (and, from a mutation, reads without
+  taking a read dependency on the limit). `hookAPI` takes it too.
+- The flags are per call and are not enforced across calls: a synchronous call
+  on a limit consumed asynchronously will over-admit and conflict with the
+  worker. Use one mode per limit.
+- `async`/`stale` can't be combined with `shards`, since the worker only writes
+  the singleton shard. That's a type error for a limit defined on the client,
+  and a runtime error for an inline config.
 - Requires `convex@^1.43.0` (for `v.commitTs()` and stale snapshot reads), and
   depends on the [batch worker](https://github.com/get-convex/batch-worker)
   component.
-- `RateLimiter` is otherwise unchanged: same config type, same ctx types, and an
-  inline `config` is still the strict `RateLimitConfig`.
+- `RateLimiter.check` now asks for `meta` on its ctx, to tell whether `stale`
+  can be honored. Every real ctx provides it; only a hand-narrowed ctx would
+  need updating.
 
 ## 0.3.2
 

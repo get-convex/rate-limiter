@@ -48,9 +48,9 @@ export const configValidator = v.union(
 
 /**
  * The over-the-wire shape of a rate limit config: every field the validators
- * accept, including the `lazy` flag the clients set for themselves. Component
- * internals work with this; app code should use {@link RateLimitConfig} or
- * {@link LazyRateLimitConfig}.
+ * accept, including the `lazy` flag the client stamps on when a call opts into
+ * asynchronous consumption. Component internals work with this; app code should
+ * use {@link RateLimitConfig}.
  */
 export type RateLimitConfigValue = Infer<typeof configValidator>;
 
@@ -76,9 +76,9 @@ type FixedWindowFields = {
   start?: number;
 } & CommonConfigFields;
 
-// Collapses an intersection into a single object type. Each config type has to
-// stay a two-member union that discriminates on `kind`, or a config whose
-// `kind` isn't narrowed to one literal stops being assignable to it.
+// Collapses an intersection into a single object type. This has to stay a
+// two-member union that discriminates on `kind`, or a config whose `kind` isn't
+// narrowed to one literal stops being assignable to it.
 type Flatten<T> = T extends object ? { [K in keyof T]: T[K] } : never;
 
 /**
@@ -86,10 +86,8 @@ type Flatten<T> = T extends object ? { [K in keyof T]: T[K] } : never;
  * at once. Each request reads a couple of shards, so the capacity a single
  * request can draw on is `capacity / (shards / 2)`.
  *
- * This is the only difference between {@link RateLimitConfig} and
- * {@link LazyRateLimitConfig}: keeping the two options on separate types is
- * what stops them being combined, since a lazy limit has one writer and extra
- * shards would only fragment its capacity.
+ * A sharded limit can't be consumed asynchronously: the two spread writes over
+ * different documents, and a batch worker applies only to the singleton shard.
  */
 type ShardOption = { shards?: number };
 
@@ -100,32 +98,14 @@ export type TokenBucketConfig = Flatten<TokenBucketFields & ShardOption>;
 export type FixedWindowConfig = Flatten<FixedWindowFields & ShardOption>;
 
 /**
- * One of the supported rate limits, consumed synchronously.
+ * One of the supported rate limits.
  * See {@link tokenBucketValidator} and {@link fixedWindowValidator} for more
  * information.
  *
- * For limits hot enough that the synchronous write becomes a bottleneck, see
- * {@link LazyRateLimitConfig}.
+ * Whether a limit is consumed synchronously or asynchronously is decided per
+ * call, with `async` on `limit` and `stale` on `check` — not here.
  */
 export type RateLimitConfig = TokenBucketConfig | FixedWindowConfig;
-
-/** A lazily-consumed token bucket rate limit. */
-export type LazyTokenBucketConfig = Flatten<TokenBucketFields>;
-
-/** A lazily-consumed fixed window rate limit. */
-export type LazyFixedWindowConfig = Flatten<FixedWindowFields>;
-
-/**
- * A rate limit consumed asynchronously, for use with `LazyRateLimiter`.
- *
- * Requests check a recent snapshot and queue their consumption for a batch
- * worker to fold in, so any number of them can share one limit without write
- * conflicts, at the cost of a check that can lag slightly behind reality.
- *
- * There is deliberately no `shards` option: the worker is the limit's only
- * writer, so sharding it would only fragment its capacity.
- */
-export type LazyRateLimitConfig = LazyTokenBucketConfig | LazyFixedWindowConfig;
 
 /**
  * Arguments for rate limiting.

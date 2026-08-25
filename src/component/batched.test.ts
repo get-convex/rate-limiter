@@ -389,3 +389,73 @@ describe("queue accounting edge cases", () => {
     expect((await t.query(api.batched.check, { name, config })).ok).toBe(true);
   });
 });
+
+// `async`/`stale` are per-call flags, so nothing stops a limit being consumed
+// both ways. These pin down what that costs, since it's the one thing a caller
+// has to get right on its own.
+describe("mixing synchronous and asynchronous consumption", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A long period, so the clock jump `drainWorker` causes doesn't replenish
+  // enough to hide the over-admission.
+  const config = {
+    kind: "token bucket",
+    rate: 10,
+    period: 60 * Minute,
+  } as RateLimitConfigValue;
+  const asyncConfig = { ...config, lazy: true } as RateLimitConfigValue;
+
+  test("a synchronous call ignores queued consumption and over-admits", async () => {
+    const t = initConvexTest();
+    const name = "mixed";
+
+    // Use the whole limit asynchronously.
+    await t.mutation(api.batched.limit, {
+      name,
+      count: 10,
+      config: asyncConfig,
+    });
+    expect(
+      (await t.query(api.batched.check, { name, config: asyncConfig })).ok,
+    ).toBe(false);
+
+    // A synchronous call reads only the stored value, which the worker hasn't
+    // written yet, so it sees a full limit and admits.
+    const sync = await t.mutation(api.lib.rateLimit, {
+      name,
+      count: 10,
+      config,
+    });
+    expect(sync.ok).toBe(true);
+
+    // 20 tokens admitted from a limit of 10. Once the worker catches up the debt
+    // is real, so it self-corrects rather than compounding.
+    await drainWorker(t);
+    const [limit] = await t.run((ctx) => ctx.db.query("rateLimits").collect());
+    expect(limit.value).toBeLessThan(0);
+  });
+
+  test("a non-stale check ignores queued consumption too", async () => {
+    const t = initConvexTest();
+    const name = "mixedCheck";
+
+    await t.mutation(api.batched.limit, {
+      name,
+      count: 10,
+      config: asyncConfig,
+    });
+    // Same limit, same instant: the stale check sees the queue, the plain one
+    // doesn't. This is why `stale` has to be used consistently.
+    expect(
+      (await t.query(api.batched.check, { name, config: asyncConfig })).ok,
+    ).toBe(false);
+    expect((await t.query(api.lib.checkRateLimit, { name, config })).ok).toBe(
+      true,
+    );
+  });
+});

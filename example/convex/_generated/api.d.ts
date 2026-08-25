@@ -8,8 +8,8 @@
  * @module
  */
 
+import type * as asyncLimits from "../asyncLimits.js";
 import type * as example from "../example.js";
-import type * as lazy from "../lazy.js";
 import type * as loadTest from "../loadTest.js";
 import type * as playground from "../playground.js";
 
@@ -20,8 +20,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  asyncLimits: typeof asyncLimits;
   example: typeof example;
-  lazy: typeof lazy;
   loadTest: typeof loadTest;
   playground: typeof playground;
 }>;
