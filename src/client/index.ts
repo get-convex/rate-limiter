@@ -144,23 +144,34 @@ export class RateLimiter<
     });
   }
   /**
-   * Reset a rate limit. This will remove the rate limit from the database.
-   * The next request will start fresh.
+   * Reset a rate limit. By default this removes the rate limit from the
+   * database, so the next request will start fresh with full capacity.
    * Note: In the case of a fixed window without a specified `start`,
    * the new window will be a random time.
+   *
+   * Passing `to` instead sets the rate limit to a specific number of tokens,
+   * spread evenly over the shards. e.g. `{ to: 0 }` exhausts the rate limit.
    * @param ctx The ctx object from a mutation, including runMutation.
    * @param name The name of the rate limit to reset, including all shards.
-   * @param key If a key is provided, it will reset the rate limit for that key.
+   * @param args `key`: if provided, it will reset the rate limit for that key.
    * If not, it will reset the rate limit for the shared value.
+   * `to`: the number of tokens to set the rate limit to, instead of the
+   * default full capacity. It may not exceed the capacity.
+   * `config` is required when using `to` if the rate limit was not defined in
+   * {@link RateLimiter}.
    */
   async reset<Name extends string = keyof Limits & string>(
     { runMutation }: MutationCtx | ActionCtx,
     name: Name,
-    args?: { key?: string },
+    args?: { key?: string; to?: number; config?: RateLimitConfig },
   ): Promise<void> {
     await runMutation(this.component.lib.resetRateLimit, {
-      ...(args ?? null),
+      key: args?.key,
       name,
+      // The config is only needed (and only validated) when setting a value.
+      ...(args?.to === undefined
+        ? {}
+        : { to: args.to, config: this.getConfig(args, name) }),
     });
   }
 
@@ -270,12 +281,14 @@ export class RateLimiter<
     };
   }
 
-  private getConfig<Name extends string, Args>(
-    args: WithKnownNameOrInlinedConfig<Limits, Name, Args> | undefined,
+  private getConfig<Name extends string>(
+    args: object | undefined,
     name: Name,
   ): RateLimitConfig {
     const config =
-      (args && "config" in args && args.config) ||
+      (args &&
+        "config" in args &&
+        (args.config as RateLimitConfig | undefined)) ||
       (this.limits && this.limits[name]);
     if (!config) {
       throw new Error(

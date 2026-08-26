@@ -103,6 +103,8 @@ export const resetRateLimit = mutation({
   args: {
     name: v.string(),
     key: v.optional(v.string()),
+    to: v.optional(v.number()),
+    config: v.optional(configValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -110,8 +112,49 @@ export const resetRateLimit = mutation({
       .query("rateLimits")
       .withIndex("name", (q) => q.eq("name", args.name).eq("key", args.key))
       .collect();
+    if (args.to === undefined) {
+      for (const shard of allShards) {
+        await ctx.db.delete("rateLimits", shard._id);
+      }
+      return;
+    }
+    if (!args.config) {
+      throw new Error(
+        `Resetting ${args.name} to a specific value requires the rate limit ` +
+          `config, so it knows the capacity and number of shards.`,
+      );
+    }
+    const config = configWithDefaults(args.config);
+    if (args.to > config.capacity) {
+      throw new Error(
+        `Cannot reset ${args.name} to ${args.to}: it exceeds the capacity ` +
+          `${config.capacity}.`,
+      );
+    }
+    const now = Date.now();
+    const perShard = args.to / config.shards;
+    const existingByShard = new Map(allShards.map((s) => [s.shard, s]));
     for (const shard of allShards) {
-      await ctx.db.delete("rateLimits", shard._id);
+      // The config may have fewer shards than when it was last written.
+      if (shard.shard >= config.shards) {
+        await ctx.db.delete("rateLimits", shard._id);
+      }
+    }
+    for (let shard = 0; shard < config.shards; shard++) {
+      const existing = existingByShard.get(shard);
+      // Advance to the current window / time before overwriting the value.
+      const { ts } = calculateRateLimit(existing ?? null, config, now);
+      if (existing) {
+        await ctx.db.patch("rateLimits", existing._id, { ts, value: perShard });
+      } else {
+        await ctx.db.insert("rateLimits", {
+          name: args.name,
+          key: args.key,
+          ts,
+          value: perShard,
+          shard,
+        });
+      }
     }
   },
 });

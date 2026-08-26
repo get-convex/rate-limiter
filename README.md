@@ -186,6 +186,20 @@ const status = await rateLimiter.check(ctx, "failedLogins", { key: userId });
 await rateLimiter.reset(ctx, "failedLogins", { key: userId });
 ```
 
+By default this deletes the rate limit, so the next request starts fresh with
+the full capacity. Pass `to` to set it to a specific value instead, spread
+evenly over the shards:
+
+```ts
+// Start the user out with no tokens, instead of a full bucket.
+await rateLimiter.reset(ctx, "sendMessage", { key: userId, to: 0 });
+// Or grant a partial refill.
+await rateLimiter.reset(ctx, "sendMessage", { key: userId, to: 2 });
+```
+
+The value may not exceed the rate limit's capacity. If the rate limit wasn't
+defined in the `RateLimiter` constructor, pass the `config` alongside `to`.
+
 ### Define a rate limit inline / dynamically
 
 ```ts
