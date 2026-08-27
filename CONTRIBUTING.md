@@ -17,6 +17,12 @@ npm run lint
 npm run test
 ```
 
+`npm run lint` includes a Prettier formatting check. To fix formatting:
+
+```sh
+npm run format
+```
+
 ## Deploying
 
 ### Building a one-off package
