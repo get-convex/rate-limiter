@@ -46,6 +46,8 @@ rare), but will serve most real-world use cases.
 - Configurable for fixed window or token bucket algorithms.
 - Efficient storage and compute: storage is not proportional to requests.
 - Configurable sharding for scalability.
+- Opt-in `lazy` limits that are applied in the background, for when even
+  sharding isn't enough.
 - Transactional evaluation: all rate limit changes will roll back if your
   mutation fails.
 - Fairness guarantees via credit "reservation": save yourself from exponential
@@ -104,6 +106,13 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
   // Use sharding to increase throughput without compromising on correctness.
   llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, shards: 10 },
   llmRequests: { kind: "fixed window", rate: 1000, period: MINUTE, shards: 10 },
+  // Or apply a limit lazily in the background, so callers never conflict.
+  llmTokenBudget: {
+    kind: "token bucket",
+    rate: 1000000,
+    period: HOUR,
+    lazy: true,
+  },
 });
 ```
 
@@ -301,6 +310,44 @@ with more capacity, to keep them relatively balanced, based on the
 [power of two technique](https://www.eecs.harvard.edu/~michaelm/postscripts/tpds2001.pdf).
 We will also combine the capacity of the two shards if neither has enough on
 their own.
+
+### Lazy rate limits for very high throughput
+
+Sharding raises the ceiling, but every shard is still a document that concurrent
+mutations contend for. When you'd rather not pay for that contention at all,
+mark the limit `lazy`:
+
+```ts
+const rateLimiter = new RateLimiter(components.rateLimiter, {
+  llmTokens: { kind: "token bucket", rate: 40000, period: MINUTE, lazy: true },
+});
+
+// ... in a mutation or action, exactly as before:
+const status = await rateLimiter.limit(ctx, "llmTokens", { count: tokens });
+```
+
+A lazy limit behaves differently in two ways:
+
+1. Reads (`check`, `getValue`, and the check `limit` does) come from a recent
+   database snapshot, so they never conflict with concurrent writers.
+2. Writes (consuming tokens, `reset`) are enqueued and applied in batches by a
+   background worker, powered by the
+   [Batch Worker component](https://www.convex.dev/components/batch-worker).
+
+The trade-off is that lazy limits are **eventually** consistent. Concurrent
+callers all read the same snapshot, so a burst can collectively overshoot the
+limit before the worker has applied any of their consumption. Use it where you
+want to bound overall usage over time rather than enforce an exact instantaneous
+cap (LLM token budgets are a good fit), and leave `lazy` off when a request must
+never be admitted past the limit.
+
+Because a single worker applies every update, a `lazy` limit can't also set
+`shards` — it's a type error. You can freely mix strict and lazy limits in one
+`RateLimiter`.
+
+To `reset` a lazy limit that was defined inline rather than in the constructor,
+pass its `config` so the reset is queued:
+`rateLimiter.reset(ctx, name, { config })`.
 
 ### Reserving capacity:
 
