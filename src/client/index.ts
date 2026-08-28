@@ -73,7 +73,7 @@ export class RateLimiter<
 > {
   constructor(
     public component: ComponentApi,
-    public limits?: Limits,
+    public limits?: Limits & ValidLimits<Limits>,
   ) {}
 
   /**
@@ -98,12 +98,15 @@ export class RateLimiter<
    *   await ctx.scheduler.runAfter(retryAfter, ...)
    * ```
    */
-  async check<Name extends string = keyof Limits & string>(
+  async check<
+    Name extends string = keyof Limits & string,
+    Config extends RateLimitConfig = RateLimitConfig,
+  >(
     ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
-      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs, Config>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs, Config>]
   ): Promise<RateLimitReturns> {
     const config = this.getConfig(options[0], name);
     const args = { ...options[0], name, config };
@@ -133,12 +136,15 @@ export class RateLimiter<
    *   await ctx.scheduler.runAfter(retryAfter, ...)
    * ```
    */
-  async limit<Name extends string = keyof Limits & string>(
+  async limit<
+    Name extends string = keyof Limits & string,
+    Config extends RateLimitConfig = RateLimitConfig,
+  >(
     ctx: MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
-      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>?]
-      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs>]
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs, Config>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, RateLimitArgs, Config>]
   ): Promise<RateLimitReturns> {
     const config = this.getConfig(options[0], name);
     if (!config.lazy) {
@@ -183,10 +189,13 @@ export class RateLimiter<
    * for the shared value. `config` is required if the rate limit was not
    * defined in {@link RateLimiter}. See {@link RateLimitArgs}.
    */
-  async reset<Name extends string = keyof Limits & string>(
+  async reset<
+    Name extends string = keyof Limits & string,
+    Config extends RateLimitConfig = RateLimitConfig,
+  >(
     { runMutation }: MutationCtx | ActionCtx,
     name: Name,
-    args?: { key?: string; config?: RateLimitConfig },
+    args?: { key?: string; config?: Config & NoLazySharding<Config> },
   ): Promise<void> {
     const config = args?.config ?? this.limits?.[name];
     const resetArgs = { key: args?.key, name };
@@ -210,7 +219,10 @@ export class RateLimiter<
    * @returns An object containing the current value, timestamp, window start time (for fixed window),
    * and the rate limit configuration.
    */
-  async getValue<Name extends string = keyof Limits & string>(
+  async getValue<
+    Name extends string = keyof Limits & string,
+    Config extends RateLimitConfig = RateLimitConfig,
+  >(
     ctx: QueryCtx | MutationCtx | ActionCtx,
     name: Name,
     ...options: Name extends keyof Limits & string
@@ -218,14 +230,16 @@ export class RateLimiter<
           WithKnownNameOrInlinedConfig<
             Limits,
             Name,
-            { key?: string; sampleShards?: number }
+            { key?: string; sampleShards?: number },
+            Config
           >?,
         ]
       : [
           WithKnownNameOrInlinedConfig<
             Limits,
             Name,
-            { key?: string; sampleShards?: number }
+            { key?: string; sampleShards?: number },
+            Config
           >,
         ]
   ): Promise<GetValueReturns> {
@@ -256,11 +270,26 @@ export class RateLimiter<
   hookAPI<
     DataModel extends GenericDataModel,
     Name extends string = keyof Limits & string,
+    Config extends RateLimitConfig = RateLimitConfig,
   >(
     name: Name,
     ...options: Name extends keyof Limits
-      ? [WithKnownNameOrInlinedConfig<Limits, Name, HookOpts<DataModel>>?]
-      : [WithKnownNameOrInlinedConfig<Limits, Name, HookOpts<DataModel>>]
+      ? [
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            HookOpts<DataModel>,
+            Config
+          >?,
+        ]
+      : [
+          WithKnownNameOrInlinedConfig<
+            Limits,
+            Name,
+            HookOpts<DataModel>,
+            Config
+          >,
+        ]
   ) {
     return {
       getRateLimit: queryGeneric({
@@ -299,8 +328,8 @@ export class RateLimiter<
     };
   }
 
-  private getConfig<Name extends string, Args>(
-    args: WithKnownNameOrInlinedConfig<Limits, Name, Args> | undefined,
+  private getConfig<Name extends string, Args, Config extends RateLimitConfig>(
+    args: WithKnownNameOrInlinedConfig<Limits, Name, Args, Config> | undefined,
     name: Name,
   ): RateLimitConfig {
     const config =
@@ -351,22 +380,28 @@ export type ActionCtx = Pick<
   GenericActionCtx<GenericDataModel>,
   "runQuery" | "runMutation" | "runAction" | "meta"
 >;
+type NoLazySharding<Config> = Config extends { lazy: true; shards: number }
+  ? { "Lazy rate limits cannot be sharded": never }
+  : unknown;
+
+type ValidLimits<Limits> = {
+  [Name in keyof Limits]: NoLazySharding<Limits[Name]>;
+};
+
 type WithKnownNameOrInlinedConfig<
   Limits extends Record<string, RateLimitConfig>,
   Name extends string,
   Args,
-> = Expand<
-  Omit<Args, "name" | "config"> &
-    (Name extends keyof Limits
-      ? object
-      : {
-          /**  The rate limit configuration, if specified inline.
-           * If you use {@link RateLimits} to define the named rate limit, you don't
-           * specify the config inline.}
-           */
-          config: RateLimitConfig;
-        })
->;
+  Config extends RateLimitConfig,
+> = Name extends keyof Limits
+  ? Expand<Omit<Args, "name" | "config">>
+  : Expand<Omit<Args, "name" | "config">> & {
+      /**  The rate limit configuration, if specified inline.
+       * If you use {@link RateLimits} to define the named rate limit, you don't
+       * specify the config inline.}
+       */
+      config: Config & NoLazySharding<Config>;
+    };
 
 type HookOpts<DataModel extends GenericDataModel> = {
   key?:
