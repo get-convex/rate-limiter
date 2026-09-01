@@ -48,7 +48,8 @@ export const configValidator = v.union(
  * information.
  */
 export type RateLimitConfig =
-  Infer<typeof tokenBucketValidator> | Infer<typeof fixedWindowValidator>;
+  | Infer<typeof tokenBucketValidator>
+  | Infer<typeof fixedWindowValidator>;
 
 /**
  * Arguments for rate limiting.

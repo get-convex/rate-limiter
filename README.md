@@ -360,7 +360,7 @@ const retryAfter = status.retryAfter + Math.random() * period;
 
 For the fixed window, we also introduce randomness by picking the start time of
 the window (from which all subsequent windows are based) randomly if
-config.start wasn't provided. This helps prevent all clients from flooding 
+config.start wasn't provided. This helps prevent all clients from flooding
 requests at midnight and paging you.
 
 ## More resources
