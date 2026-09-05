@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `reset` takes an optional `to` value, to reset a rate limit to a specific
+  number of tokens instead of the default full capacity, e.g. `{ to: 0 }`.
+
 ## 0.3.2
 
 - Pass client-provided keys to the key function, don't trust them by default.

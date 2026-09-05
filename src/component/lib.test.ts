@@ -319,6 +319,123 @@ describe.each(["token bucket", "fixed window"] as const)(
       });
     });
 
+    test("reset to a value", async () => {
+      const t = convexTest(schema, modules);
+      const name = "simple";
+      const config = { kind, rate: 5, period: Second };
+      await t.run(async (ctx) => {
+        await ctx.runMutation(api.lib.resetRateLimit, { name, to: 0, config });
+        const exhausted = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          config,
+        });
+        expect(exhausted.ok).toBe(false);
+        expect(exhausted.retryAfter).toBeGreaterThan(0);
+
+        await ctx.runMutation(api.lib.resetRateLimit, { name, to: 2, config });
+        const two = await ctx.runMutation(api.lib.rateLimit, {
+          name,
+          config,
+          count: 2,
+        });
+        expect(two.ok).toBe(true);
+        const third = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          config,
+        });
+        expect(third.ok).toBe(false);
+      });
+    });
+
+    test("keyed reset to a value", async () => {
+      const t = convexTest(schema, modules);
+      const name = "simple";
+      const key = "key";
+      const config = { kind, rate: 5, period: Second };
+      await t.run(async (ctx) => {
+        await ctx.runMutation(api.lib.resetRateLimit, {
+          name,
+          key,
+          to: 0,
+          config,
+        });
+        const keyed = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          key,
+          config,
+        });
+        expect(keyed.ok).toBe(false);
+        // Other keys are unaffected.
+        const other = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          key: "other",
+          config,
+        });
+        expect(other.ok).toBe(true);
+      });
+    });
+
+    test("sharded reset to a value", async () => {
+      const t = convexTest(schema, modules);
+      const name = "sharded";
+      const shards = 4;
+      const config = { kind, rate: 8, period: Second, shards };
+      await t.run(async (ctx) => {
+        await ctx.runMutation(api.lib.resetRateLimit, { name, to: 0, config });
+        const written = await ctx.db
+          .query("rateLimits")
+          .withIndex("name", (q) => q.eq("name", name))
+          .collect();
+        expect(written.length).toBe(shards);
+        expect(written.every((s) => s.value === 0)).toBe(true);
+        const exhausted = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          config,
+        });
+        expect(exhausted.ok).toBe(false);
+
+        // Back to full: the value is spread evenly over the shards.
+        await ctx.runMutation(api.lib.resetRateLimit, { name, to: 8, config });
+        const refilled = await ctx.db
+          .query("rateLimits")
+          .withIndex("name", (q) => q.eq("name", name))
+          .collect();
+        expect(refilled.every((s) => s.value === 8 / shards)).toBe(true);
+        const full = await ctx.runQuery(api.lib.checkRateLimit, {
+          name,
+          config,
+        });
+        expect(full.ok).toBe(true);
+      });
+    });
+
+    test("reset to a value above capacity throws", async () => {
+      const t = convexTest(schema, modules);
+      const name = "simple";
+      const config = { kind, rate: 1, period: Second, capacity: 5 };
+      await expect(
+        t.run(async (ctx) => {
+          await ctx.runMutation(api.lib.resetRateLimit, {
+            name,
+            to: 6,
+            config,
+          });
+        }),
+      ).rejects.toThrow("exceeds the capacity");
+    });
+
+    test("reset to a value without a config throws", async () => {
+      const t = convexTest(schema, modules);
+      await expect(
+        t.run(async (ctx) => {
+          await ctx.runMutation(api.lib.resetRateLimit, {
+            name: "simple",
+            to: 0,
+          });
+        }),
+      ).rejects.toThrow("requires the rate limit config");
+    });
+
     test("reserved without max", async () => {
       const t = convexTest(schema, modules);
       const name = "reserved";
