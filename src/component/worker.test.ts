@@ -38,6 +38,16 @@ function consumeUpdate(args: {
   };
 }
 
+function creditUpdate(args: {
+  name: string;
+  key?: string;
+  count?: number;
+  config: RateLimitConfig;
+}) {
+  const { ts: _ts, ...update } = consumeUpdate(args);
+  return { ...update, kind: "credit" as const };
+}
+
 function resetUpdate(name: string) {
   return { kind: "reset" as const, name };
 }
@@ -194,6 +204,60 @@ describe("worker", () => {
     const applied = await shards(t);
     expect(applied).toHaveLength(1);
     expect(applied[0].value).toBe(7);
+  });
+
+  test("a credit restores capacity", async () => {
+    const t = initConvexTest();
+    const config = tokenBucketConfig({ rate: 10, period: HOUR, capacity: 10 });
+    await t.mutation(api.lib.enqueueUpdates, {
+      updates: [consumeUpdate({ name: "refund", count: 10, config })],
+    });
+    await drain(t);
+    expect((await shards(t))[0].value).toBe(0);
+
+    await t.mutation(api.lib.enqueueUpdates, {
+      updates: [creditUpdate({ name: "refund", count: 4, config })],
+    });
+    // Like consumption, the credit waits for the worker.
+    expect((await shards(t))[0].value).toBe(0);
+    await drain(t);
+
+    const applied = await shards(t);
+    expect(applied).toHaveLength(1);
+    expect(applied[0].shard).toBe(SINGLETON_SHARD);
+    // Exactly 4: a credit gives tokens back without advancing the limit's
+    // clock, so it doesn't accrue on its way through the worker.
+    expect(applied[0].value).toBe(4);
+  });
+
+  test("a credit never pushes a limit above its capacity", async () => {
+    const t = initConvexTest();
+    const config = tokenBucketConfig({ rate: 10, period: HOUR, capacity: 10 });
+    await t.mutation(api.lib.enqueueUpdates, {
+      updates: [
+        consumeUpdate({ name: "overflow", count: 2, config }),
+        creditUpdate({ name: "overflow", count: 100, config }),
+      ],
+    });
+    await drain(t);
+    expect((await shards(t))[0].value).toBe(10);
+  });
+
+  test("a credit for a limit with no document writes nothing", async () => {
+    const t = initConvexTest();
+    const config = tokenBucketConfig({ rate: 10, period: HOUR, capacity: 10 });
+    await t.mutation(api.lib.enqueueUpdates, {
+      updates: [creditUpdate({ name: "fresh", count: 5, config })],
+    });
+    await drain(t);
+
+    // Nothing was stored to credit, so nothing was written.
+    expect(await shards(t)).toHaveLength(0);
+    const { value } = await t.query(api.lib.getValue, {
+      name: "fresh",
+      config,
+    });
+    expect(value).toBe(10);
   });
 
   test("a stale update after a reset does not move time backwards", async () => {

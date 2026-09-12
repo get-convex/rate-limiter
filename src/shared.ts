@@ -142,6 +142,38 @@ export const rateLimitReturns = v.union(
 
 export type RateLimitReturns = Infer<typeof rateLimitReturns>;
 
+/**
+ * Arguments for crediting capacity back to a rate limit.
+ * @param name The name of the rate limit.
+ * @param key The key to use for the rate limit. If not provided, the rate limit
+ * is a single shared value.
+ * @param count The number of tokens to restore. The client defaults this to 1.
+ * @param config The rate limit configuration, if specified inline.
+ */
+export const creditArgs = {
+  name: v.string(),
+  key: v.optional(v.string()),
+  count: v.number(),
+  config: configValidator,
+};
+
+export type CreditArgs = {
+  /** The name of the rate limit. */
+  name: string;
+  /** The key to use for the rate limit. If not provided, the rate limit
+   * is a single shared value.  */
+  key?: string;
+  /** The number of tokens to restore. Defaults to 1. Any amount that would
+   * push a shard above its capacity is discarded. */
+  count?: number;
+  /** The rate limit configuration. See {@link RateLimitConfig}. */
+  config: Infer<typeof configValidator>;
+};
+
+/** {@link CreditArgs} as the component receives them, once the client has
+ * filled in the default `count`. */
+export type CreditRequest = CreditArgs & { count: number };
+
 export type RateLimitError = {
   kind: "RateLimited";
   name: string;
@@ -180,6 +212,13 @@ export const vPendingUpdate = v.union(
     count: v.number(),
     config: configValidator,
     ts: v.number(),
+  }),
+  v.object({
+    kind: v.literal("credit"),
+    name: v.string(),
+    key: v.optional(v.string()),
+    count: v.number(),
+    config: configValidator,
   }),
   v.object({
     kind: v.literal("reset"),
