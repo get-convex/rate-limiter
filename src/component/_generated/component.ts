@@ -65,6 +65,38 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         null,
         Name
       >;
+      creditRateLimit: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config:
+            | {
+                applyUpdates?: "transactionally" | "asynchronously";
+                capacity?: number;
+                kind: "token bucket";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: null;
+              }
+            | {
+                applyUpdates?: "transactionally" | "asynchronously";
+                capacity?: number;
+                kind: "fixed window";
+                maxReserved?: number;
+                period: number;
+                rate: number;
+                shards?: number;
+                start?: number;
+              };
+          count: number;
+          key?: string;
+          name: string;
+        },
+        null,
+        Name
+      >;
       enqueueUpdates: FunctionReference<
         "mutation",
         "internal",
@@ -97,6 +129,33 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 kind: "consume";
                 name: string;
                 ts: number;
+              }
+            | {
+                config:
+                  | {
+                      applyUpdates?: "transactionally" | "asynchronously";
+                      capacity?: number;
+                      kind: "token bucket";
+                      maxReserved?: number;
+                      period: number;
+                      rate: number;
+                      shards?: number;
+                      start?: null;
+                    }
+                  | {
+                      applyUpdates?: "transactionally" | "asynchronously";
+                      capacity?: number;
+                      kind: "fixed window";
+                      maxReserved?: number;
+                      period: number;
+                      rate: number;
+                      shards?: number;
+                      start?: number;
+                    };
+                count: number;
+                key?: string;
+                kind: "credit";
+                name: string;
               }
             | { key?: string; kind: "reset"; name: string }
           >;

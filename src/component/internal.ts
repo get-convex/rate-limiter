@@ -2,6 +2,7 @@ import { ConvexError, type Infer } from "convex/values";
 import {
   calculateRateLimit,
   configValidator,
+  type CreditRequest,
   type RateLimitArgs,
   type RateLimitError,
   type RateLimitReturns,
@@ -127,10 +128,81 @@ async function checkRateLimitSharded(
   return { status: { ok, retryAfter }, updates };
 }
 
+/**
+ * Apply a credit to a shard, capping by the shard's max capacity.
+ */
+export function creditShard(
+  currentValue: number,
+  creditCount: number,
+  config: Infer<typeof configValidator>,
+) {
+  const max = config.capacity ?? config.rate;
+  const room = Math.max(max - currentValue, 0);
+  // Clamp the count: a stale pending update must not take capacity away.
+  const credited = Math.min(room, Math.max(creditCount, 0));
+  return { value: currentValue + credited, credited };
+}
+
+type ShardState = { doc: Doc<"rateLimits">; value: number; ts: number };
+
+/**
+ * Work out which shards a credit should land on. Up to two shards are picked
+ * at random, the same way limiting picks them, so that a credit never takes a
+ * read dependency on every shard. Excess credits are discarded.
+ */
+export async function creditRateLimitSharded(
+  db: DatabaseReader,
+  args: CreditRequest,
+) {
+  const { count } = args;
+  validateCredit(args.name, count);
+  const unshardedConfig = configWithDefaults(args.config);
+  const { shards } = unshardedConfig;
+  const config = shardConfig(unshardedConfig, shards);
+  const now = Date.now();
+
+  let remaining = count;
+  const updates: ShardState[] = [];
+  const readShard = async (shard: number): Promise<ShardState | null> => {
+    const doc = await getShard(db, args.name, args.key, shard);
+    // A shard with no document is already at capacity, so there's nothing to
+    // give back to it.
+    return doc && { doc, ...calculateRateLimit(doc, config, now) };
+  };
+  const applyCredit = (state: ShardState | null) => {
+    if (!state || remaining <= 0) return;
+    const next = creditShard(state.value, remaining, config);
+    if (next.credited === 0) return;
+    updates.push({ doc: state.doc, value: next.value, ts: state.ts });
+    remaining -= next.credited;
+  };
+
+  const one = Math.floor(Math.random() * shards);
+  applyCredit(await readShard(one));
+  if (remaining <= 0 || shards < MIN_CHOOSE_TWO) return updates;
+  // The first shard couldn't take the whole credit, so try one more.
+  const two = (one + 1 + Math.floor(Math.random() * (shards - 1))) % shards;
+  applyCredit(await readShard(two));
+  return updates;
+}
+
+/**
+ * A credit can only ever give capacity back, never take it away.
+ */
+export function validateCredit(name: string, count: number) {
+  if (count < 0) {
+    throw new Error(`Rate limit ${name} credit count ${count} is negative`);
+  }
+}
+
 export function configWithDefaults(config: Infer<typeof configValidator>) {
+  const shards = Math.round(config.shards || 1);
+  if (shards <= 0) {
+    throw new Error("Shards must be a positive number");
+  }
   return {
     ...config,
-    shards: Math.round(config.shards || 1),
+    shards,
     capacity: config.capacity ?? config.rate,
   };
 }
@@ -139,9 +211,6 @@ export function configWithDefaults(config: Infer<typeof configValidator>) {
 function validateRequest(args: RateLimitArgs) {
   const config = configWithDefaults(args.config);
   const { shards, capacity } = config;
-  if (shards <= 0) {
-    throw new Error("Shards must be a positive number");
-  }
   const shardFactor = shards < MIN_CHOOSE_TWO ? 1 : shards / 2;
   const max = capacity / shardFactor;
   const count = args.count ?? 1;
