@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   _checkRateLimitInternal,
   checkRateLimitOrThrow,
+  creditShard,
   MIN_CHOOSE_TWO,
 } from "./internal.js";
 import schema from "./schema.js";
@@ -410,4 +411,47 @@ describe.each([1, 2, 3, 4] as const)("sharding: %s", (shards) => {
       });
     });
   }
+});
+
+describe("creditShard", () => {
+  const config = {
+    kind: "token bucket",
+    rate: 1,
+    period: Minute,
+    capacity: 10,
+  } as const;
+
+  test("takes the whole credit when it fits", () => {
+    expect(creditShard(2, 5, config)).toEqual({ value: 7, credited: 5 });
+  });
+
+  test("takes only what fits under the capacity", () => {
+    expect(creditShard(8, 5, config)).toEqual({ value: 10, credited: 2 });
+  });
+
+  test("takes nothing when the shard is already full", () => {
+    expect(creditShard(10, 5, config)).toEqual({ value: 10, credited: 0 });
+  });
+
+  test("fills a shard that reservations took negative", () => {
+    expect(creditShard(-4, 2, config)).toEqual({ value: -2, credited: 2 });
+  });
+
+  test("never removes capacity from an over-full shard", () => {
+    // A shard can sit above capacity if the limit's config shrank under it.
+    expect(creditShard(12, 5, config)).toEqual({ value: 12, credited: 0 });
+  });
+
+  test("never takes capacity away for a negative count", () => {
+    expect(creditShard(5, -3, config)).toEqual({ value: 5, credited: 0 });
+  });
+
+  test("fills up to the rate when the config has no capacity", () => {
+    const uncapped = {
+      kind: "token bucket",
+      rate: 10,
+      period: Minute,
+    } as const;
+    expect(creditShard(2, 20, uncapped)).toEqual({ value: 10, credited: 8 });
+  });
 });
