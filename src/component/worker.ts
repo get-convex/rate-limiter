@@ -12,7 +12,7 @@ import {
   calculateRateLimit,
   vPendingUpdate,
 } from "../shared.js";
-import { getShard } from "./internal.js";
+import { creditShard, getShard } from "./internal.js";
 
 export const WORKER_NAME = "rateLimiter";
 export const BATCH_SIZE = 1024;
@@ -105,6 +105,22 @@ export const processBatch = internalMutation({
             update.count,
           );
           state.next = { value, ts };
+          break;
+        }
+        case "credit": {
+          // A credit is a pure delta, with no time of its own: accrual is
+          // capped at capacity every time it's calculated, so giving the
+          // tokens back now and accruing later lands on the same value as
+          // accruing first. Nothing stored means the limit is already full
+          // (or was just reset), leaving nothing to credit.
+          if (state.next) {
+            const { value } = creditShard(
+              state.next.value,
+              update.count,
+              update.config,
+            );
+            state.next = { ...state.next, value };
+          }
           break;
         }
         default: {

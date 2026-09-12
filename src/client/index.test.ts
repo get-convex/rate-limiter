@@ -92,6 +92,16 @@ export const value = queryGeneric({
     rateLimiter.getValue(ctx, limit as LimitName, { key }),
 });
 
+export const credit = mutationGeneric({
+  args: {
+    limit: vLimit,
+    key: v.optional(v.string()),
+    count: v.optional(v.number()),
+  },
+  handler: async (ctx, { limit, key, count }) =>
+    rateLimiter.credit(ctx, limit as LimitName, { key, count }),
+});
+
 export const reset = mutationGeneric({
   args: { limit: vLimit, key: v.optional(v.string()) },
   handler: async (ctx, { limit, key }) =>
@@ -131,6 +141,7 @@ const testApi = (
   anyApi as unknown as ApiFromModules<{
     "index.test": {
       consume: typeof consume;
+      credit: typeof credit;
       check: typeof check;
       value: typeof value;
       reset: typeof reset;
@@ -243,6 +254,31 @@ describe("asynchronous", () => {
     );
   });
 
+  test("credit queues its write and restores capacity", async () => {
+    const t = initConvexTest();
+    for (let i = 0; i < 3; i++) {
+      await t.mutation(testApi.consume, { limit: "async" });
+    }
+    await drain(t);
+    expect((await t.query(testApi.check, { limit: "async" })).ok).toBe(false);
+
+    await t.mutation(testApi.credit, { limit: "async", count: 2 });
+    // The credit is queued for the worker, so nothing has changed yet.
+    expect(await valueOf(t, "async")).toBe(0);
+    await drain(t);
+
+    expect(await valueOf(t, "async")).toBeGreaterThanOrEqual(2);
+    expect((await t.query(testApi.check, { limit: "async" })).ok).toBe(true);
+  });
+
+  test("credit never takes an asynchronous limit above capacity", async () => {
+    const t = initConvexTest();
+    await t.mutation(testApi.consume, { limit: "async" });
+    await t.mutation(testApi.credit, { limit: "async", count: 100 });
+    await drain(t);
+    expect(await valueOf(t, "async")).toBe(3);
+  });
+
   test("hookAPI resolves its configured key against an asynchronous limit", async () => {
     const t = initConvexTest();
     expect((await t.query(testApi.getRateLimit, {})).value).toBe(3);
@@ -278,5 +314,36 @@ describe("transactional", () => {
     expect((await t.mutation(testApi.consume, { limit: "strict" })).ok).toBe(
       false,
     );
+  });
+
+  test("credit restores capacity right away", async () => {
+    const t = initConvexTest();
+    for (let i = 0; i < 3; i++) {
+      await t.mutation(testApi.consume, { limit: "strict" });
+    }
+    await t.mutation(testApi.credit, { limit: "strict", count: 2 });
+
+    expect(await valueOf(t, "strict")).toBe(2);
+    expect((await t.mutation(testApi.consume, { limit: "strict" })).ok).toBe(
+      true,
+    );
+  });
+
+  test("credit only restores the key it was given", async () => {
+    const t = initConvexTest();
+    for (const key of ["a", "b"]) {
+      await t.mutation(testApi.consume, { limit: "strict", count: 3, key });
+    }
+    await t.mutation(testApi.credit, { limit: "strict", count: 3, key: "a" });
+
+    expect(await valueOf(t, "strict", "a")).toBe(3);
+    expect(await valueOf(t, "strict", "b")).toBe(0);
+  });
+
+  test("credit never takes a limit above capacity", async () => {
+    const t = initConvexTest();
+    await t.mutation(testApi.consume, { limit: "strict" });
+    await t.mutation(testApi.credit, { limit: "strict", count: 100 });
+    expect(await valueOf(t, "strict")).toBe(3);
   });
 });

@@ -13,6 +13,7 @@ import {
 import { ConvexError, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 import type {
+  CreditArgs,
   RateLimitArgs,
   RateLimitConfig,
   RateLimitError,
@@ -22,6 +23,7 @@ import type {
 import { getValueArgs, getValueReturns } from "../shared.js";
 export { calculateRateLimit } from "../shared.js";
 export type {
+  CreditArgs,
   RateLimitArgs,
   RateLimitConfig,
   RateLimitError,
@@ -169,6 +171,40 @@ export class RateLimiter<
       ],
     });
     return status;
+  }
+
+  /**
+   * Credit tokens back to a rate limit, up to its maximum capacity.
+   *
+   * @param ctx The ctx object from a mutation or action, including runMutation.
+   * @param name The name of the rate limit.
+   * @param options The credit arguments. `config` is required if the rate limit
+   * was not defined in {@link RateLimiter}. `count` is the number of tokens to
+   * restore, defaulting to 1. A sharded rate limit credits up to two shards
+   * picked at random, and credit that neither can take is discarded.
+   * See {@link CreditArgs}.
+   */
+  async credit<Name extends string = keyof Limits & string>(
+    ctx: MutationCtx | ActionCtx,
+    name: Name,
+    ...options: Name extends keyof Limits & string
+      ? [WithKnownNameOrInlinedConfig<Limits, Name, CreditArgs>?]
+      : [WithKnownNameOrInlinedConfig<Limits, Name, CreditArgs>]
+  ): Promise<void> {
+    const config = this.getConfig(options[0], name);
+    const { key, count } = options[0] ?? {};
+    if (config.applyUpdates !== "asynchronously") {
+      await ctx.runMutation(this.component.lib.creditRateLimit, {
+        name,
+        key,
+        count,
+        config,
+      });
+      return;
+    }
+    await ctx.runMutation(this.component.lib.enqueueUpdates, {
+      updates: [{ kind: "credit", name, key, count: count ?? 1, config }],
+    });
   }
 
   /**

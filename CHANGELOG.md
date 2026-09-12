@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `rateLimiter.credit(...)` to give capacity back to a rate limit.
+
 ## 0.4.0
 
 - Add a new async mode to the Rate Limiter component that improves throughput

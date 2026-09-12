@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server.js";
 import {
   calculateRateLimit,
+  creditArgs,
   getValueReturns,
   rateLimitArgs,
   configValidator,
@@ -12,6 +13,7 @@ import {
 import {
   checkRateLimitOrThrow,
   configWithDefaults,
+  creditRateLimitSharded,
   getShard,
 } from "./internal.js";
 import { api } from "./_generated/api.js";
@@ -37,6 +39,23 @@ export const rateLimit = mutation({
       }
     }
     return status;
+  },
+});
+
+export const creditRateLimit = mutation({
+  args: creditArgs,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.config.applyUpdates === "asynchronously") {
+      throw new Error(
+        `Rate limit config for ${args.name} has \`applyUpdates: "asynchronously"\`. Credits must be enqueued.`,
+      );
+    }
+    const updates = await creditRateLimitSharded(ctx.db, args);
+    for (const { doc, value, ts } of updates) {
+      await ctx.db.patch("rateLimits", doc._id, { value, ts });
+    }
+    return null;
   },
 });
 
@@ -114,7 +133,7 @@ export const enqueueUpdates = mutation({
   handler: async (ctx, { updates }) => {
     for (const update of updates) {
       if (
-        update.kind === "consume" &&
+        update.kind !== "reset" &&
         update.config.applyUpdates === "transactionally"
       ) {
         throw new Error(

@@ -2,6 +2,7 @@ import { ConvexError, type Infer } from "convex/values";
 import {
   calculateRateLimit,
   configValidator,
+  type CreditArgs,
   type RateLimitArgs,
   type RateLimitError,
   type RateLimitReturns,
@@ -125,6 +126,66 @@ async function checkRateLimitSharded(
     twoShared.status.retryAfter ?? 0,
   );
   return { status: { ok, retryAfter }, updates };
+}
+
+/**
+ * Apply a credit to a shard, capping by the shard's max capacity.
+ */
+export function creditShard(
+  currentValue: number,
+  creditCount: number,
+  config: Infer<typeof configValidator>,
+) {
+  const max = config.capacity ?? config.rate;
+  const credited = Math.min(Math.max(max - currentValue, 0), creditCount);
+  return { value: currentValue + credited, credited };
+}
+
+type ShardState = { doc: Doc<"rateLimits">; value: number; ts: number };
+
+/**
+ * Work out which shards a credit should land on. Up to two shards are picked
+ * at random, the same way limiting picks them, so that a credit never takes a
+ * read dependency on every shard. Excess credits are discarded.
+ */
+export async function creditRateLimitSharded(
+  db: DatabaseReader,
+  args: CreditArgs,
+) {
+  const count = args.count ?? 1;
+  if (count < 0) {
+    throw new Error(
+      `Rate limit ${args.name} credit count ${count} is negative`,
+    );
+  }
+  const unshardedConfig = configWithDefaults(args.config);
+  const { shards } = unshardedConfig;
+  const config = shardConfig(unshardedConfig, shards);
+  const now = Date.now();
+
+  let remaining = count;
+  const updates: ShardState[] = [];
+  const readShard = async (shard: number): Promise<ShardState | null> => {
+    const doc = await getShard(db, args.name, args.key, shard);
+    // A shard with no document is already at capacity, so there's nothing to
+    // give back to it.
+    return doc && { doc, ...calculateRateLimit(doc, config, now) };
+  };
+  const applyCredit = (state: ShardState | null) => {
+    if (!state || remaining <= 0) return;
+    const next = creditShard(state.value, remaining, config);
+    if (next.credited === 0) return;
+    updates.push({ doc: state.doc, value: next.value, ts: state.ts });
+    remaining -= next.credited;
+  };
+
+  const one = Math.floor(Math.random() * shards);
+  applyCredit(await readShard(one));
+  if (remaining <= 0 || shards < MIN_CHOOSE_TWO) return updates;
+  // The first shard couldn't take the whole credit, so try one more.
+  const two = (one + 1 + Math.floor(Math.random() * (shards - 1))) % shards;
+  applyCredit(await readShard(two));
+  return updates;
 }
 
 export function configWithDefaults(config: Infer<typeof configValidator>) {
