@@ -83,26 +83,37 @@ export const processBatch = internalMutation({
     const states = new Map<string, LimitState>();
     for (const { update } of updates) {
       const state = await loadLimitState(ctx, states, update.name, update.key);
-      if (update.kind === "reset") {
-        state.next = null;
-        continue;
+      switch (update.kind) {
+        case "reset": {
+          state.next = null;
+          break;
+        }
+        case "consume": {
+          // Try to use as much of the limit's capacity as possible by
+          // calculating the rate limit at the update timestamp. Clamp `now` so
+          // that time does not move backwards past the stored state due to
+          // out-of-order update timestamps or after a reset.
+          const now = Math.max(
+            update.ts,
+            state.next?.ts ?? update.ts,
+            state.existing?.ts ?? update.ts,
+          );
+          const { value, ts } = calculateRateLimit(
+            state.next,
+            update.config,
+            now,
+            update.count,
+          );
+          state.next = { value, ts };
+          break;
+        }
+        default: {
+          update satisfies never;
+          throw new Error(
+            `Unhandled pending update: ${JSON.stringify(update)}`,
+          );
+        }
       }
-      // Try to use as much of the limit's capacity as possible by calculating
-      // the rate limit at the update timestamp. Clamp `now` so that time does
-      // not move backwards past the stored state due to out-of-order update
-      // timestamps or after a reset.
-      const now = Math.max(
-        update.ts,
-        state.next?.ts ?? update.ts,
-        state.existing?.ts ?? update.ts,
-      );
-      const { value, ts } = calculateRateLimit(
-        state.next,
-        update.config,
-        now,
-        update.count,
-      );
-      state.next = { value, ts };
     }
     await Promise.all([
       ...Array.from(states.values(), (state) => writeLimitState(ctx, state)),
