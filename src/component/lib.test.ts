@@ -401,6 +401,131 @@ describe.each(["token bucket", "fixed window"] as const)(
   },
 );
 
+describe.each(["token bucket", "fixed window"] as const)(
+  "creditRateLimit %s",
+  (kind) => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test("restores consumed capacity", async () => {
+      const t = convexTest(schema, modules);
+      const name = "credit";
+      const config = { kind, rate: 3, period: Hour };
+      for (let i = 0; i < 3; i++) {
+        await t.mutation(api.lib.rateLimit, { name, config });
+      }
+      expect((await t.query(api.lib.checkRateLimit, { name, config })).ok).toBe(
+        false,
+      );
+
+      await t.mutation(api.lib.creditRateLimit, { name, config, count: 2 });
+
+      expect((await t.query(api.lib.getValue, { name, config })).value).toBe(2);
+      expect((await t.query(api.lib.checkRateLimit, { name, config })).ok).toBe(
+        true,
+      );
+    });
+
+    test("defaults to crediting one token", async () => {
+      const t = convexTest(schema, modules);
+      const name = "credit";
+      const config = { kind, rate: 3, period: Hour };
+      await t.mutation(api.lib.rateLimit, { name, config, count: 3 });
+      await t.mutation(api.lib.creditRateLimit, { name, config });
+      expect((await t.query(api.lib.getValue, { name, config })).value).toBe(1);
+    });
+
+    test("never credits past capacity", async () => {
+      const t = convexTest(schema, modules);
+      const name = "capped";
+      const config = { kind, rate: 3, period: Hour };
+      await t.mutation(api.lib.rateLimit, { name, config });
+      await t.mutation(api.lib.creditRateLimit, { name, config, count: 100 });
+      expect((await t.query(api.lib.getValue, { name, config })).value).toBe(3);
+    });
+
+    test("does not write to a limit with no document", async () => {
+      const t = convexTest(schema, modules);
+      const name = "untouched";
+      const config = { kind, rate: 3, period: Hour };
+      await t.mutation(api.lib.creditRateLimit, { name, config, count: 3 });
+      expect(
+        await t.run((ctx) => ctx.db.query("rateLimits").collect()),
+      ).toEqual([]);
+    });
+
+    test("credits only the given key", async () => {
+      const t = convexTest(schema, modules);
+      const name = "keyed";
+      const config = { kind, rate: 1, period: Hour };
+      for (const key of ["a", "b"]) {
+        await t.mutation(api.lib.rateLimit, { name, config, key });
+      }
+      await t.mutation(api.lib.creditRateLimit, { name, config, key: "a" });
+
+      const values = await t.run(async (ctx) =>
+        Object.fromEntries(
+          (await ctx.db.query("rateLimits").collect()).map((doc) => [
+            doc.key,
+            doc.value,
+          ]),
+        ),
+      );
+      expect(values).toEqual({ a: 1, b: 0 });
+    });
+
+    test("fills the emptiest shards first", async () => {
+      const t = convexTest(schema, modules);
+      const name = "sharded";
+      // 3 shards of a rate of 30 gives each shard a capacity of 10.
+      const config = { kind, rate: 30, period: Hour, shards: 3 };
+      await t.run(async (ctx) => {
+        const ts = Date.now();
+        for (const [shard, value] of [2, 8, 9].entries()) {
+          await ctx.db.insert("rateLimits", { name, shard, value, ts });
+        }
+      });
+
+      // Room is 8, 2 and 1: the credit fills shard 0, then 1, then 2.
+      await t.mutation(api.lib.creditRateLimit, { name, config, count: 11 });
+      expect(await shardValues(t, name)).toEqual([10, 10, 10]);
+
+      // With every shard full there's nowhere left for a credit to go.
+      await t.mutation(api.lib.creditRateLimit, { name, config, count: 5 });
+      expect(await shardValues(t, name)).toEqual([10, 10, 10]);
+    });
+
+    test("rejects a negative count", async () => {
+      const t = convexTest(schema, modules);
+      const config = { kind, rate: 3, period: Hour };
+      await expect(
+        t.mutation(api.lib.creditRateLimit, {
+          name: "negative",
+          config,
+          count: -1,
+        }),
+      ).rejects.toThrow("credit count -1 is negative");
+    });
+  },
+);
+
+async function shardValues(
+  t: ReturnType<typeof convexTest<(typeof schema)["tables"]>>,
+  name: string,
+): Promise<number[]> {
+  const docs = await t.run(async (ctx) =>
+    ctx.db
+      .query("rateLimits")
+      .withIndex("name", (q) => q.eq("name", name))
+      .collect(),
+  );
+  return docs.sort((a, b) => a.shard - b.shard).map((doc) => doc.value);
+}
+
 describe("asynchronous configs", () => {
   const config = {
     kind: "token bucket",
@@ -418,21 +543,36 @@ describe("asynchronous configs", () => {
     );
   });
 
-  test("can't be queued when updates are applied transactionally", async () => {
+  test("can't be credited by creditRateLimit", async () => {
     const t = convexTest(schema, modules);
-    const update = {
-      kind: "consume" as const,
-      name: "eager",
-      count: 1,
-      config: { ...config, applyUpdates: "transactionally" as const },
-      ts: Date.now(),
-    };
     await expect(
-      t.mutation(api.lib.enqueueUpdates, { updates: [update] }),
+      t.mutation(api.lib.creditRateLimit, { name: "async", config }),
     ).rejects.toThrow(
-      'Rate limit config for eager has `applyUpdates: "transactionally"`',
+      'Rate limit config for async has `applyUpdates: "asynchronously"`',
     );
   });
+
+  test.each(["consume", "credit"] as const)(
+    "a %s update can't be queued when updates are applied transactionally",
+    async (kind) => {
+      const t = convexTest(schema, modules);
+      const enqueued = {
+        name: "eager",
+        count: 1,
+        config: { ...config, applyUpdates: "transactionally" as const },
+      };
+      // Only consumption carries a timestamp; a credit has no time of its own.
+      const update =
+        kind === "consume"
+          ? { ...enqueued, kind, ts: Date.now() }
+          : { ...enqueued, kind };
+      await expect(
+        t.mutation(api.lib.enqueueUpdates, { updates: [update] }),
+      ).rejects.toThrow(
+        'Rate limit config for eager has `applyUpdates: "transactionally"`',
+      );
+    },
+  );
 
   test("are readable, since the async path checks through the same query", async () => {
     const t = convexTest(schema, modules);

@@ -2,6 +2,7 @@ import { ConvexError, type Infer } from "convex/values";
 import {
   calculateRateLimit,
   configValidator,
+  type CreditArgs,
   type RateLimitArgs,
   type RateLimitError,
   type RateLimitReturns,
@@ -125,6 +126,59 @@ async function checkRateLimitSharded(
     twoShared.status.retryAfter ?? 0,
   );
   return { status: { ok, retryAfter }, updates };
+}
+
+/**
+ * Apply a credit to a shard, capping by the shard's max capacity.
+ */
+export function creditShard(
+  currentValue: number,
+  creditCount: number,
+  config: Infer<typeof configValidator>,
+) {
+  const max = config.capacity ?? config.rate;
+  const credited = Math.min(Math.max(max - currentValue, 0), creditCount);
+  return { value: currentValue + credited, credited };
+}
+
+/**
+ * Work out which shards a credit should land on. Capacity is handed to the
+ * emptiest shards first. Excess credits are discarded.
+ */
+export async function creditRateLimitSharded(
+  db: DatabaseReader,
+  args: CreditArgs,
+) {
+  const count = args.count ?? 1;
+  if (count < 0) {
+    throw new Error(
+      `Rate limit ${args.name} credit count ${count} is negative`,
+    );
+  }
+  const unshardedConfig = configWithDefaults(args.config);
+  const { shards } = unshardedConfig;
+  const config = shardConfig(unshardedConfig, shards);
+  const now = Date.now();
+  const existing = await db
+    .query("rateLimits")
+    .withIndex("name", (q) => q.eq("name", args.name).eq("key", args.key))
+    .collect();
+  const states = existing
+    .filter((doc) => doc.shard < shards)
+    // Calculate the current value for each shard
+    .map((doc) => ({ doc, ...calculateRateLimit(doc, config, now) }))
+    .sort((a, b) => a.value - b.value);
+
+  let remaining = count;
+  const updates: { doc: Doc<"rateLimits">; value: number; ts: number }[] = [];
+  for (const { doc, value, ts } of states) {
+    if (remaining <= 0) break;
+    const next = creditShard(value, remaining, config);
+    if (next.credited === 0) continue;
+    updates.push({ doc, value: next.value, ts });
+    remaining -= next.credited;
+  }
+  return updates;
 }
 
 export function configWithDefaults(config: Infer<typeof configValidator>) {
