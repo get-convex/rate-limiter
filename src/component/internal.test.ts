@@ -393,6 +393,48 @@ describe.each([1, 2, 3, 4] as const)("sharding: %s", (shards) => {
     });
   });
 
+  test("reports the shards it consumed from", async () => {
+    const t = convexTest(schema, modules);
+    const ts = Date.now();
+    await t.run(async (ctx) => {
+      for (let shard = 0; shard < shards; shard++) {
+        await ctx.db.insert("rateLimits", { name, shard, ts, value: 1 });
+      }
+      const { status, updates } = await checkRateLimitOrThrow(ctx.db, {
+        name,
+        config,
+      });
+      expect(status.ok).toBe(true);
+      expect(status.shards).toEqual(
+        shards === 1 ? undefined : updates.map((update) => update.shard),
+      );
+    });
+  });
+
+  test("reports the shards it checked when there isn't capacity", async () => {
+    const t = convexTest(schema, modules);
+    const ts = Date.now();
+    await t.run(async (ctx) => {
+      for (let shard = 0; shard < shards; shard++) {
+        await ctx.db.insert("rateLimits", { name, shard, ts, value: 0 });
+      }
+      const { status } = await checkRateLimitOrThrow(ctx.db, { name, config });
+      expect(status.ok).toBe(false);
+      if (shards === 1) {
+        expect(status.shards).toBeUndefined();
+        return;
+      }
+      // Every shard is empty, so it checks as many as it's willing to.
+      const checked = status.shards!;
+      expect(checked).toHaveLength(shards < MIN_CHOOSE_TWO ? 1 : 2);
+      expect(new Set(checked).size).toBe(checked.length);
+      for (const shard of checked) {
+        expect(shard).toBeGreaterThanOrEqual(0);
+        expect(shard).toBeLessThan(shards);
+      }
+    });
+  });
+
   if (shards >= MIN_CHOOSE_TWO) {
     test("success when shards have enough put together", async () => {
       const t = convexTest(schema, modules);

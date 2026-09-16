@@ -45,13 +45,18 @@ async function checkRateLimitSharded(
   const unshardedConfig = configWithDefaults(args.config);
   const { shards } = unshardedConfig;
   const config = shardConfig(unshardedConfig, shards);
+  // Only a sharded rate limit reports the shards its result came from.
+  const used = (...shardsUsed: number[]) =>
+    shards === 1 ? undefined : shardsUsed;
   const shardArgs = { ...args, config };
   const one = await checkShard(
     db,
     shardArgs,
     Math.floor(Math.random() * shards),
   );
-  if (!one.existing || shards < MIN_CHOOSE_TWO) return returnSingle(one);
+  if (!one.existing || shards < MIN_CHOOSE_TWO) {
+    return returnSingle(one, used(one.shard));
+  }
   // Find another shard to check
   const two = await checkShard(
     db,
@@ -59,11 +64,12 @@ async function checkRateLimitSharded(
     (one.shard + 1 + Math.floor(Math.random() * (shards - 1))) % shards,
   );
   if (one.status.ok && !two.status.ok) {
-    return returnSingle(one);
+    return returnSingle(one, used(one.shard));
   } else if (!one.status.ok && two.status.ok) {
-    return returnSingle(two);
+    return returnSingle(two, used(two.shard));
   } else if (one.status.ok && two.status.ok) {
-    return returnSingle(one.value > two.value ? one : two);
+    const better = one.value > two.value ? one : two;
+    return returnSingle(better, used(better.shard));
   }
   if (one.status.ok || two.status.ok) {
     throw new Error("Unreachable");
@@ -95,6 +101,7 @@ async function checkRateLimitSharded(
           oneShared.status.retryAfter,
           twoShared.status.retryAfter,
         ),
+        shards: used(one.shard, two.shard),
       } as const,
       updates: [],
     };
@@ -117,15 +124,19 @@ async function checkRateLimitSharded(
         },
       ]
     : [];
+  const shardsUsed = used(one.shard, two.shard);
   if (!oneShared.status.retryAfter && !twoShared.status.retryAfter) {
     // It succeeded without any reserve capacity
-    return { status: { ok: true, retryAfter: undefined }, updates };
+    return {
+      status: { ok: true, retryAfter: undefined, shards: shardsUsed },
+      updates,
+    };
   }
   const retryAfter = Math.max(
     oneShared.status.retryAfter ?? 0,
     twoShared.status.retryAfter ?? 0,
   );
-  return { status: { ok, retryAfter }, updates };
+  return { status: { ok, retryAfter, shards: shardsUsed }, updates };
 }
 
 /**
@@ -146,9 +157,12 @@ export function creditShard(
 type ShardState = { doc: Doc<"rateLimits">; value: number; ts: number };
 
 /**
- * Work out which shards a credit should land on. Up to two shards are picked
- * at random, the same way limiting picks them, so that a credit never takes a
- * read dependency on every shard. Excess credits are discarded.
+ * Work out which shards a credit should land on. Capacity is handed to the
+ * emptiest shards first. Excess credits are discarded.
+ *
+ * Given a list of shards, only those are read. Otherwise, up to two shards are
+ * picked at random, the same way limiting picks them, so that a credit never
+ * takes a read dependency on every shard.
  */
 export async function creditRateLimitSharded(
   db: DatabaseReader,
@@ -177,6 +191,17 @@ export async function creditRateLimitSharded(
     remaining -= next.credited;
   };
 
+  if (args.shards?.length) {
+    const chosen = requestedShards(args.name, args.shards, shards);
+    const states = await Promise.all(chosen.map(readShard));
+    states
+      .filter((state) => state !== null)
+      // Fill the emptiest shards first, so the credit goes as far as it can.
+      .sort((a, b) => a.value - b.value)
+      .forEach(applyCredit);
+    return updates;
+  }
+
   const one = Math.floor(Math.random() * shards);
   applyCredit(await readShard(one));
   if (remaining <= 0 || shards < MIN_CHOOSE_TWO) return updates;
@@ -193,6 +218,21 @@ export function validateCredit(name: string, count: number) {
   if (count < 0) {
     throw new Error(`Rate limit ${name} credit count ${count} is negative`);
   }
+}
+
+/**
+ * Validate the shards a credit asked for, dropping duplicates.
+ */
+function requestedShards(name: string, requested: number[], shards: number) {
+  const chosen = [...new Set(requested)];
+  for (const shard of chosen) {
+    if (!Number.isInteger(shard) || shard < 0 || shard >= shards) {
+      throw new Error(
+        `Rate limit ${name} has ${shards} shard(s), so it has no shard ${shard}.`,
+      );
+    }
+  }
+  return chosen;
 }
 
 export function configWithDefaults(config: Infer<typeof configValidator>) {
@@ -232,9 +272,12 @@ function validateRequest(args: RateLimitArgs) {
   }
 }
 
-function returnSingle(result: Awaited<ReturnType<typeof checkShard>>) {
+function returnSingle(
+  result: Awaited<ReturnType<typeof checkShard>>,
+  shards: number[] | undefined,
+) {
   const { status, ...update } = result;
-  return { status, updates: status.ok ? [update] : [] };
+  return { status: { ...status, shards }, updates: status.ok ? [update] : [] };
 }
 
 async function checkShard(

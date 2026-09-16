@@ -44,6 +44,29 @@ describe.each(["token bucket", "fixed window"] as const)(
       });
     });
 
+    test("reports the shards a sharded limit used", async () => {
+      const t = convexTest(schema, modules);
+      const name = "sharded";
+      const config = { kind, rate: 10, period: Hour, shards: 5 };
+      const status = await t.mutation(api.lib.rateLimit, { name, config });
+      expect(status.ok).toBe(true);
+      const written = await t.run((ctx) =>
+        ctx.db.query("rateLimits").collect(),
+      );
+      expect(status.shards).toEqual(written.map((doc) => doc.shard));
+    });
+
+    test("reports no shards for an unsharded limit", async () => {
+      const t = convexTest(schema, modules);
+      const name = "unsharded";
+      const config = { kind, rate: 1, period: Second };
+      const consumed = await t.mutation(api.lib.rateLimit, { name, config });
+      expect(consumed.shards).toBeUndefined();
+      const checked = await t.query(api.lib.checkRateLimit, { name, config });
+      expect(checked.ok).toBe(false);
+      expect(checked.shards).toBeUndefined();
+    });
+
     test("simple consume", async () => {
       const t = convexTest(schema, modules);
       const name = "simple";
@@ -493,6 +516,87 @@ describe.each(["token bucket", "fixed window"] as const)(
         }
       });
     }
+
+    test("fills the emptiest of the given shards first", async () => {
+      const t = convexTest(schema, modules);
+      const name = "sharded";
+      const config = shardedConfig([2, 8, 9]);
+      await withShards(t, name, [2, 8, 9]);
+
+      // Room is 8 on shard 0 and 2 on shard 1: it fills 0, then 1, and the
+      // last token has nowhere to go.
+      await t.mutation(api.lib.creditRateLimit, {
+        name,
+        config,
+        count: 11,
+        shards: [1, 0],
+      });
+      expect(await shardValues(t, name)).toEqual([10, 10, 9]);
+
+      // With those shards full there's nowhere left for a credit to go.
+      await t.mutation(api.lib.creditRateLimit, {
+        name,
+        config,
+        count: 5,
+        shards: [0, 1],
+      });
+      expect(await shardValues(t, name)).toEqual([10, 10, 9]);
+    });
+
+    test("credits the shards a limit consumed from", async () => {
+      const t = convexTest(schema, modules);
+      const name = "roundtrip";
+      const config = shardedConfig([10, 10, 10]);
+      await withShards(t, name, [10, 10, 10]);
+
+      const status = await t.mutation(api.lib.rateLimit, {
+        name,
+        config,
+        count: 10,
+      });
+      expect(status.ok).toBe(true);
+      expect(status.shards).toHaveLength(1);
+      expect(await shardValues(t, name)).not.toEqual([10, 10, 10]);
+
+      await t.mutation(api.lib.creditRateLimit, {
+        name,
+        config,
+        count: 10,
+        shards: status.shards,
+      });
+      expect(await shardValues(t, name)).toEqual([10, 10, 10]);
+    });
+
+    test("only credits the shards it was given", async () => {
+      const t = convexTest(schema, modules);
+      const name = "chosen";
+      const config = shardedConfig([0, 0, 0]);
+      await withShards(t, name, [0, 0, 0]);
+
+      await t.mutation(api.lib.creditRateLimit, {
+        name,
+        config,
+        count: 4,
+        // Duplicates are ignored: shard 2 takes the whole credit.
+        shards: [2, 2],
+      });
+      expect(await shardValues(t, name)).toEqual([0, 0, 4]);
+    });
+
+    test("rejects a shard the rate limit doesn't have", async () => {
+      const t = convexTest(schema, modules);
+      const config = shardedConfig([0, 0, 0]);
+      await expect(
+        t.mutation(api.lib.creditRateLimit, {
+          name: "chosen",
+          config,
+          count: 1,
+          shards: [3],
+        }),
+      ).rejects.toThrow(
+        "Rate limit chosen has 3 shard(s), so it has no shard 3",
+      );
+    });
 
     test("spreads a credit over at most two random shards", async () => {
       const t = convexTest(schema, modules);

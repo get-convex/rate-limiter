@@ -128,15 +128,23 @@ export type RateLimitArgs = {
   config: Infer<typeof configValidator>;
 };
 
+/**
+ * The result of checking or consuming a rate limit.
+ * `shards` is only set for sharded rate limits: the shards the result came
+ * from. When `ok`, those are the shards holding the capacity, which `limit`
+ * consumes from. When not `ok`, those are the shards that were too empty to
+ * satisfy the request.
+ */
 export const rateLimitReturns = v.union(
   v.object({
     ok: v.literal(true),
     retryAfter: v.optional(v.number()),
+    shards: v.optional(v.array(v.number())),
   }),
   v.object({
     ok: v.literal(false),
-    // TODO: include the shard here they should retry with
     retryAfter: v.number(),
+    shards: v.optional(v.array(v.number())),
   }),
 );
 
@@ -148,12 +156,15 @@ export type RateLimitReturns = Infer<typeof rateLimitReturns>;
  * @param key The key to use for the rate limit. If not provided, the rate limit
  * is a single shared value.
  * @param count The number of tokens to restore. The client defaults this to 1.
+ * @param shards The shards of a sharded rate limit to credit, e.g. the `shards`
+ * returned by limiting it. If not provided, shards are picked at random.
  * @param config The rate limit configuration, if specified inline.
  */
 export const creditArgs = {
   name: v.string(),
   key: v.optional(v.string()),
   count: v.number(),
+  shards: v.optional(v.array(v.number())),
   config: configValidator,
 };
 
@@ -166,6 +177,10 @@ export type CreditArgs = {
   /** The number of tokens to restore. Defaults to 1. Any amount that would
    * push a shard above its capacity is discarded. */
   count?: number;
+  /** The shards of a sharded rate limit to credit, e.g. the `shards` returned
+   * by {@link RateLimitReturns}. If not provided, up to two shards are picked
+   * at random and any credit they can't take is discarded. */
+  shards?: number[];
   /** The rate limit configuration. See {@link RateLimitConfig}. */
   config: Infer<typeof configValidator>;
 };

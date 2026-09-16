@@ -55,7 +55,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           reserve?: boolean;
           throws?: boolean;
         },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        | { ok: true; retryAfter?: number; shards?: Array<number> }
+        | { ok: false; retryAfter: number; shards?: Array<number> },
         Name
       >;
       clearAll: FunctionReference<
@@ -93,6 +94,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           count: number;
           key?: string;
           name: string;
+          shards?: Array<number>;
         },
         null,
         Name
@@ -258,7 +260,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           reserve?: boolean;
           throws?: boolean;
         },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number },
+        | { ok: true; retryAfter?: number; shards?: Array<number> }
+        | { ok: false; retryAfter: number; shards?: Array<number> },
         Name
       >;
       resetRateLimit: FunctionReference<

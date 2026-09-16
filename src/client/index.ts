@@ -88,12 +88,15 @@ export class RateLimiter<
    * @param name The name of the rate limit.
    * @param options The rate limit arguments. `config` is required if the rate
    * limit was not defined in {@link RateLimiter}. See {@link RateLimitArgs}.
-   * @returns `{ ok, retryAfter }`: `ok` is true if the rate limit is not exceeded.
+   * @returns `{ ok, retryAfter, shards }`: `ok` is true if the rate limit is
+   * not exceeded.
    * `retryAfter` is the duration in milliseconds when retrying could succeed.
    * If `reserve` is true, `ok` is true if there's enough capacity including
    * reservation. If there is a maxiumum reservation limit, `ok` will be false
    * when it is exceeded. When `ok` is true and `retryAfter` is defined, it is
    * the duration you must wait before executing the work.
+   * `shards` is only set for sharded rate limits: the shards the result came
+   * from.
    * e.g.:
    * ```ts
    * if (status.retryAfter) {
@@ -123,12 +126,15 @@ export class RateLimiter<
    * @param name The name of the rate limit.
    * @param options The rate limit arguments. `config` is required if the rate
    * limit was not defined in {@link RateLimiter}. See {@link RateLimitArgs}.
-   * @returns `{ ok, retryAfter }`: `ok` is true if the rate limit is not exceeded.
+   * @returns `{ ok, retryAfter, shards }`: `ok` is true if the rate limit is
+   * not exceeded.
    * `retryAfter` is the duration in milliseconds when retrying could succeed.
    * If `reserve` is true, `ok` is true if there's enough capacity including
    * reservation. If there is a maxiumum reservation limit, `ok` will be false
    * when it is exceeded. When `ok` is true and `retryAfter` is defined, it is
    * the duration you must wait before executing the work.
+   * `shards` is only set for sharded rate limits: the shards the result came
+   * from.
    * e.g.:
    * ```ts
    * if (status.retryAfter) {
@@ -180,8 +186,10 @@ export class RateLimiter<
    * @param name The name of the rate limit.
    * @param options The credit arguments. `config` is required if the rate limit
    * was not defined in {@link RateLimiter}. `count` is the number of tokens to
-   * restore, defaulting to 1. A sharded rate limit credits up to two shards
-   * picked at random, and credit that neither can take is discarded.
+   * restore, defaulting to 1. For a sharded rate limit, `shards` says which
+   * shards to credit - pass the `shards` that {@link limit} returned to give
+   * the capacity back where it was taken from. Without them, up to two shards
+   * are picked at random, and credit that neither can take is discarded.
    * See {@link CreditArgs}.
    */
   async credit<Name extends string = keyof Limits & string>(
@@ -192,15 +200,21 @@ export class RateLimiter<
       : [WithKnownNameOrInlinedConfig<Limits, Name, CreditArgs>]
   ): Promise<void> {
     const config = this.getConfig(options[0], name);
-    const { key, count } = options[0] ?? {};
+    const { key, count, shards } = options[0] ?? {};
     if (config.applyUpdates !== "asynchronously") {
       await ctx.runMutation(this.component.lib.creditRateLimit, {
         name,
         key,
         count: count ?? 1,
+        shards,
         config,
       });
       return;
+    }
+    if (shards?.length) {
+      throw new Error(
+        `Rate limit ${name} applies updates asynchronously and can't be sharded.`,
+      );
     }
     await ctx.runMutation(this.component.lib.enqueueUpdates, {
       updates: [{ kind: "credit", name, key, count: count ?? 1, config }],
