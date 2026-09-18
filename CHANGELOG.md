@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Add `rateLimiter.credit(...)` to give capacity back to a rate limit.
+- `limit` and `check` now return the `shards` a sharded rate limit used. Pass
+  them to `credit` to give the capacity back to the same shards.
 
 ## 0.4.0
 

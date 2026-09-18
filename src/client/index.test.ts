@@ -97,9 +97,10 @@ export const credit = mutationGeneric({
     limit: vLimit,
     key: v.optional(v.string()),
     count: v.optional(v.number()),
+    shards: v.optional(v.array(v.number())),
   },
-  handler: async (ctx, { limit, key, count }) =>
-    rateLimiter.credit(ctx, limit as LimitName, { key, count }),
+  handler: async (ctx, { limit, key, count, shards }) =>
+    rateLimiter.credit(ctx, limit as LimitName, { key, count, shards }),
 });
 
 export const reset = mutationGeneric({
@@ -269,6 +270,15 @@ describe("asynchronous", () => {
 
     expect(await valueOf(t, "async")).toBeGreaterThanOrEqual(2);
     expect((await t.query(testApi.check, { limit: "async" })).ok).toBe(true);
+  });
+
+  test("credit can't pick shards on an asynchronous limit", async () => {
+    const t = initConvexTest();
+    await expect(
+      t.mutation(testApi.credit, { limit: "async", shards: [0] }),
+    ).rejects.toThrow(
+      "Rate limit async applies updates asynchronously and can't be sharded",
+    );
   });
 
   test("credit never takes an asynchronous limit above capacity", async () => {

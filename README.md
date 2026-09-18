@@ -199,6 +199,18 @@ await rateLimiter.credit(ctx, "llmTokens", { count: reserved - used });
 The rate limit is capped at its `rate` (or `capacity`, if set). Any excess is
 discarded.
 
+For a sharded rate limit, pass the `shards` that `limit` returned, so the
+capacity goes back where it was taken from:
+
+```ts
+const status = await rateLimiter.limit(ctx, "llmTokens", { count: reserved });
+// ...
+await rateLimiter.credit(ctx, "llmTokens", {
+  count: reserved - used,
+  shards: status.shards,
+});
+```
+
 ### Reset a rate limit
 
 ```ts
@@ -356,6 +368,18 @@ with more capacity, to keep them relatively balanced, based on the
 We will also combine the capacity of the two shards if neither has enough on
 their own.
 
+For a sharded rate limit, `limit` and `check` return the shards the result came
+from:
+
+```ts
+const status = await rateLimiter.limit(ctx, "llmRequests");
+// e.g. [3, 7]: when `ok`, the shards the tokens were consumed from, and
+// otherwise the shards that were checked and found too empty.
+console.log(status.shards);
+```
+
+When the rate limit isn't sharded, `shards` is undefined.
+
 #### Resetting or crediting a sharded rate limit
 
 Resetting a sharded rate limit will read and write to all of the shards, which
@@ -364,10 +388,11 @@ involves frequent resets, consider
 [applying updates asynchronously](#avoiding-contention-with-asynchronous-updates)
 instead of sharding.
 
-A credit reads up to two shards, picked at random the same way limiting picks
-them, so that it never depends on every shard. It fills the first shard it reads
-and only looks at a second if there's credit left over; anything those shards
-can't take without going over capacity is discarded.
+A credit only touches the shards you give it. Without a `shards` argument it
+reads up to two picked at random, the same way limiting picks them, so that it
+never depends on every shard: it fills the first shard it reads and only looks
+at a second if there's credit left over. Whichever shards it lands on, credit
+that would push them over their capacity is discarded.
 
 ### Reserving capacity:
 
