@@ -13,6 +13,15 @@ import type { DatabaseReader } from "./_generated/server.js";
 // since it'd introduce a read dependency on all shards anyways.
 export const MIN_CHOOSE_TWO = 3;
 
+/**
+ * Pick two distinct shards at random.
+ */
+export function getTwoRandomShards(shards: number): [number, number] {
+  const one = Math.floor(Math.random() * shards);
+  const two = (one + 1 + Math.floor(Math.random() * (shards - 1))) % shards;
+  return [one, two];
+}
+
 export async function checkRateLimitOrThrow(
   db: DatabaseReader,
   args: RateLimitArgs,
@@ -45,18 +54,11 @@ async function checkRateLimitSharded(
   const { shards } = unshardedConfig;
   const config = shardConfig(unshardedConfig, shards);
   const shardArgs = { ...args, config };
-  const one = await checkShard(
-    db,
-    shardArgs,
-    Math.floor(Math.random() * shards),
-  );
+  const [oneShard, twoShard] = getTwoRandomShards(shards);
+  const one = await checkShard(db, shardArgs, oneShard);
   if (!one.existing || shards < MIN_CHOOSE_TWO) return returnSingle(one);
   // Find another shard to check
-  const two = await checkShard(
-    db,
-    shardArgs,
-    (one.shard + 1 + Math.floor(Math.random() * (shards - 1))) % shards,
-  );
+  const two = await checkShard(db, shardArgs, twoShard);
   if (one.status.ok && !two.status.ok) {
     return returnSingle(one);
   } else if (!one.status.ok && two.status.ok) {
