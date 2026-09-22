@@ -2,6 +2,7 @@ import { ConvexError, type Infer } from "convex/values";
 import {
   calculateRateLimit,
   configValidator,
+  type CreditRequest,
   type RateLimitArgs,
   type RateLimitError,
   type RateLimitReturns,
@@ -127,6 +128,76 @@ async function checkRateLimitSharded(
     twoShared.status.retryAfter ?? 0,
   );
   return { status: { ok, retryAfter }, updates };
+}
+
+/**
+ * Apply a credit to a shard, capping by the shard's max capacity.
+ */
+export function creditShard(
+  currentValue: number,
+  creditCount: number,
+  config: Infer<typeof configValidator>,
+) {
+  const max = config.capacity ?? config.rate;
+  // Do not take capacity away from a limit with capacity over the max.
+  const maxPossibleCredit = Math.max(max - currentValue, 0);
+  const credited = Math.min(maxPossibleCredit, creditCount);
+  return { value: currentValue + credited, credited };
+}
+
+/**
+ * Work out which shards a credit should land on. Up to two shards are picked
+ * at random, the same way limiting picks them, so that a credit never takes a
+ * read dependency on every shard. Excess credits are discarded.
+ */
+export async function creditRateLimitSharded(
+  db: DatabaseReader,
+  args: CreditRequest,
+) {
+  const { count } = args;
+  validateCredit(args.name, count);
+  const unshardedConfig = configWithDefaults(args.config);
+  const { shards } = unshardedConfig;
+  validateShards(shards);
+  const config = shardConfig(unshardedConfig, shards);
+  const now = Date.now();
+
+  const [oneShard, twoShard] = getTwoRandomShards(shards);
+  const updates = [];
+  let remaining = count;
+
+  // A shard with no document is already at capacity, so there's nothing to
+  // give back to it.
+  const oneDoc = await getShard(db, args.name, args.key, oneShard);
+  if (oneDoc) {
+    const one = calculateRateLimit(oneDoc, config, now);
+    const oneCredit = creditShard(one.value, count, config);
+    if (oneCredit.credited > 0) {
+      updates.push({ doc: oneDoc, value: oneCredit.value, ts: one.ts });
+      remaining -= oneCredit.credited;
+    }
+  }
+
+  if (remaining <= 0 || shards < MIN_CHOOSE_TWO) return updates;
+
+  // Try applying the leftover credit to a second random shard.
+  const twoDoc = await getShard(db, args.name, args.key, twoShard);
+  if (!twoDoc) return updates;
+  const two = calculateRateLimit(twoDoc, config, now);
+  const twoCredit = creditShard(two.value, remaining, config);
+  if (twoCredit.credited > 0) {
+    updates.push({ doc: twoDoc, value: twoCredit.value, ts: two.ts });
+  }
+  return updates;
+}
+
+/**
+ * A credit can only ever give capacity back, never take it away.
+ */
+export function validateCredit(name: string, count: number) {
+  if (count < 0) {
+    throw new Error(`Rate limit ${name} credit count ${count} is negative`);
+  }
 }
 
 export function configWithDefaults(config: Infer<typeof configValidator>) {
