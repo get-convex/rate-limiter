@@ -137,13 +137,17 @@ export function configWithDefaults(config: Infer<typeof configValidator>) {
   };
 }
 
+function validateShards(shards: number) {
+  if (shards <= 0) {
+    throw new Error("Shards must be a positive number");
+  }
+}
+
 // Sanity check that this could ever be satisfied
 function validateRequest(args: RateLimitArgs) {
   const config = configWithDefaults(args.config);
   const { shards, capacity } = config;
-  if (shards <= 0) {
-    throw new Error("Shards must be a positive number");
-  }
+  validateShards(shards);
   const shardFactor = shards < MIN_CHOOSE_TWO ? 1 : shards / 2;
   const max = capacity / shardFactor;
   const count = args.count ?? 1;
