@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1-alpha.0
 
 - Add `rateLimiter.credit(...)` to give capacity back to a rate limit.
 
