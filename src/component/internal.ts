@@ -49,7 +49,7 @@ async function checkRateLimitSharded(
     shard: number;
   }[];
 }> {
-  validateRequest(args);
+  validateRateLimitRequest(args);
   const unshardedConfig = configWithDefaults(args.config);
   const { shards } = unshardedConfig;
   const config = shardConfig(unshardedConfig, shards);
@@ -144,7 +144,7 @@ function validateShards(shards: number) {
 }
 
 // Sanity check that this could ever be satisfied
-function validateRequest(args: RateLimitArgs) {
+function validateRateLimitRequest(args: RateLimitArgs) {
   const config = configWithDefaults(args.config);
   const { shards, capacity } = config;
   validateShards(shards);
