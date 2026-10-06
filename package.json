@@ -65,7 +65,7 @@
     }
   },
   "dependencies": {
-    "@convex-dev/batch-worker": "0.3.4"
+    "@convex-dev/batch-worker": "0.3.5"
   },
   "peerDependencies": {
     "convex": "^1.43.0",
@@ -90,7 +90,7 @@
     "@vitejs/plugin-react": "5.1.4",
     "autoprefixer": "10.4.24",
     "chokidar-cli": "3.0.0",
-    "convex": "1.45.0",
+    "convex": "1.46.0",
     "convex-test": "0.0.56",
     "dayjs": "1.11.19",
     "eslint": "9.39.2",
