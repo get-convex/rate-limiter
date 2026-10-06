@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Improve type generic for test entrypoint
+
 ## 0.4.0
 
 - Add a new async mode to the Rate Limiter component that improves throughput
