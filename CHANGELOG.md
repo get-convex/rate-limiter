@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- Updates the /test entrypoint for compatibility with convex-test's new
+  `defineTestApp` capability.
+
 ## 0.4.1
 
 - Improve type generic for test entrypoint
