@@ -291,7 +291,7 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 
 Instead of updating rate limits transactionally, updates are placed in a queue
 and applied in the background by a
-[Batch Worker](https://github.com/get-convex/batch-worker). Checking the limit
+[Batch Worker](https://github.com/convex/batch-worker). Checking the limit
 inside a mutation reads from a stale database snapshot, so these rate limit
 calls will never conflict with concurrent writers.
 
